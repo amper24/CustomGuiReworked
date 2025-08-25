@@ -1,0 +1,35 @@
+name: CustomGuiReworked
+version: '1.1'
+main: dev.moonaticks.customGuiReworked.CustomGuiReworked
+api-version: '1.21'
+depend: [NBTAPI]
+softdepend: [ItemsAdder]
+use-library-loader: true
+commands:
+  gui:
+    usage: /gui
+    description: Create a GUI in the database
+    parameters:
+      type:
+        description: create, edit, open, delete.
+        type: string
+    permissions: cgui.bypass
+permissions:
+  cgui.create:
+    description: allow create gui command
+    default: op
+  cgui.open:
+    description: allow open gui command
+    default: op
+  cgui.edit:
+    description: allow edit gui command
+    default: op
+  cgui.reload:
+    description: allow reload gui plugin
+    default: op
+  cgui.command:
+    description: allow to set commands in gui
+    default: op
+  cgui.delete:
+    description: allow to set commands in gui
+    default: op

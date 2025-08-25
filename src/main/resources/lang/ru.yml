@@ -1,0 +1,154 @@
+language:
+  # ===== BASIC UI ELEMENTS =====
+  error: "§c§lОШИБКА"
+  
+  # ===== GUI TITLES =====
+  mainEditorTitle: "§8[ⒼⓊⓘ ⒺⒹⓘⓉⓄⓇ]: §f"
+  skeletonEditorTitle: "§6Скелет GUI: §f"
+  designEditorTitle: "§aДизайн GUI: §f"
+  saveDataEditorTitle: "§bНастройка сохранения: §f"
+  sizeEditorTitle: "§eКоличество слотов: §f"
+  slotCount: "§eКоличество слотов: §f"
+  skeletonGui: "§6Скелет GUI: §f"
+  designGui: "§aДизайн GUI: §f"
+  saveDataSettings: "§bНастройки сохранения данных: §f"
+  
+  # ===== EDITOR BUTTONS =====
+  slotCountButton: "§e[установить количество слотов]"
+  skeletonButton: "§6[установить скелет]"
+  designButton: "§a[установить дизайн]"
+  settingsButton: "§d[установить заголовок]"
+  saveDataButton: "§b[установить метод сохранения данных]"
+  showButton: "§2[показать таблицу]"
+  sizeButton: "§9[установить блок ItemsAdder]"
+  
+  # ===== EDITOR GUI ELEMENTS =====
+  setSlotCount: "§eЗадать количество слотов"
+  createSkeleton: "§eСоздать скелет интерфейса"
+  createDesign: "§eСоздать дизайн интерфейса"
+  interfaceSettings: "§eНастройка интерфейса"
+  saveDataSettingsButton: "§eНастройка сохранения данных"
+  previewInterface: "§eПредпросмотр интерфейса"
+  configureItemsAdder: "§eНастроить блоки ItemsAdder"
+  
+  # ===== SLOT LABELS =====
+  designSlotLabel: "§aСлот дизайна"
+  containerSlotLabel: "§bСлот контейнера"
+  resultSlotLabel: "§eСлот результата"
+  craftSlotLabel: "§6Слот крафта"
+  fuelSlotLabel: "§cСлот топлива"
+  blockedSlot: "§eblocked"
+  
+  # ===== SLOT COUNTS =====
+  slot9: "§79 слотов"
+  slot18: "§718 слотов"
+  slot27: "§727 слотов"
+  slot36: "§736 слотов"
+  slot45: "§745 слотов"
+  slot54: "§754 слота"
+  
+  # ===== SAVE METHODS =====
+  blockSaveLabel: "§eСохранение в блоке"
+  playerSaveLabel: "§eСохранение в игроке"
+  globalSaveLabel: "§eГлобальное сохранение для игроков"
+  teamSaveLabel: "§eСохранение в команде"
+  noSaveLabel: "§eБез сохранения"
+  
+  # ===== COMMAND MESSAGES =====
+  CommandError: "§cИспользуйте: §f/gui [create/open/delete/edit/reload]"
+  CommandSetCommandError: "§cИспользуйте: §f/gui command [add/get/delete] <слот> <имя_интерфейса> \"<Команда>\""
+  CommandDeleteCommandError: "§cИспользуйте: §f/gui delete <имя_интерфейса> [confirm]"
+  CommandEditCommandError: "§cИспользуйте: §f/gui edit <имя_интерфейса>"
+  CommandCreateCommandError: "§cИспользуйте: §f/gui create <имя_интерфейса>"
+  CommandAddError: "§cИспользуйте: §f/gui command add <слот> <имя_интерфейса> \"<команда>\""
+  CommandGetError: "§cИспользуйте: §f/gui command get <слот> <имя_интерфейса>"
+  CommandDeleteError: "§cИспользуйте: §f/gui command delete <слот> <имя_интерфейса> <индекс>"
+  WrongUsage: "§cНеверное использование, используйте: §f/gui [create/open/delete/edit/reload/command]"
+  
+  # ===== SUCCESS MESSAGES =====
+  DeleteSuccess: "§aИнтерфейс §f%s §aбыл удален!"
+  ReloadSuccess: "§aПереводы перезагружены успешно!"
+  CommandAddSuccess: "§aКоманда добавлена в слот: §f%s"
+  CommandGetSuccess: "§aКоманда получена из слота: §f%s"
+  CommandDeleteSuccess: "§aКоманда удалена из слота: §f%s"
+  titleSet: "§aНазвание стола интерфейса установлено на: §f"
+  TableTitleSet: "§eНазвание стола установлено на: §f%s"
+  BlockIdRemoved: "§eID блока удалено: §f%s"
+  BlockIdAdded: "§eID блока добавлено: §f%s"
+  Deleted: "§aУдалено!"
+  
+  # ===== ERROR MESSAGES =====
+  NoPermission: "§cУ вас нет прав для использования этой команды"
+  InterfaceNotFound: "§cИнтерфейс не найден!"
+  ErrorSet: "§cИспользуйте: §f/gui edit <имя_интерфейса>"
+  ErrorOpen: "§cИнтерфейс не найден!"
+  SlotsError: "§cСлот должен быть числом!"
+  DelayError: "§cЗадержка должна быть числом!"
+  IndexError: "§cИндекс должен быть числом!"
+  PlayersOnly: "§cЭта команда может быть выполнена только игроками."
+  
+  # ===== INTERFACE MESSAGES =====
+  Interface: "§aИнтерфейс: §f%s"
+  notFound: "§cНе найдено!"
+  setTitle: "§eОтправьте название стола интерфейса в чат"
+  SendTableTitle: "§eОтправьте название стола интерфейса в чат"
+  SendBlockId: "§eОтправьте id блока в чат"
+  
+  # ===== COMMAND LIST MESSAGES =====
+  CommandList: "§aСписок команд для таблицы: §f%s"
+  SlotCommand: "§aДля команды в слоте: §f%s"
+  Delay: "§6Задержка: §f%s"
+  CommandNotFound: "§cКоманда в слоте §f%s §aдля интерфейса §f%s §cне найдена!"
+  CommandValue: "§aКоманда в слоте §f%s §aдля интерфейса §f%s §aимеет значение: §f%s"
+  CommandListHeader: "§e################################"
+  CommandListTitle: "§aСписок команд для таблицы §f%s §aдля слота §f%s"
+  CommandListFormat: "§e%s §f- %s"
+  CommandListFooter: "§e################################"
+  
+  # ===== TABLE GUI MESSAGES =====
+  BlockInventoryError: "§cИнвентарь блока не может быть открыт командой"
+  NoBlockSelected: "§cВы не выбрали блок!"
+  
+  # ===== GUI ERROR MESSAGES =====
+  InterfaceBrokenSkeleton: "§cИнтерфейс сломан. Скелет не загружен"
+  InterfaceBrokenCount: "§cИнтерфейс сломан. Количество не подходит"
+  InterfaceBrokenDesigns: "§cИнтерфейс сломан. Дизайны не загружены"
+  
+  # ===== MANAGER MESSAGES =====
+  FolderCreated: "Папка для GUI создана!"
+  GuiFilePathNotSet: "Путь к файлу GUI не установлен!"
+  
+  # ===== DATABASE MANAGER MESSAGES =====
+  FailedToSaveNullStorage: "Не удалось сохранить null storage в блок!"
+  PlayerDidNotClickBlock: "Игрок не кликнул по блоку!"
+  WorldNotFoundForBlock: "Мир для блока не найден!"
+  ErrorSavingDataToBlock: "Ошибка при сохранении данных в блок: "
+  AttemptToSaveNullStorageForPlayer: "Попытка сохранить null storage для игрока!"
+  ErrorSavingPlayerData: "Ошибка при сохранении данных игрока: "
+  AttemptToSaveNullStorageGlobally: "Попытка сохранить null storage глобально!"
+  ErrorSavingGlobalData: "Ошибка при глобальном сохранении данных: "
+  AttemptToSaveNullStorageForTeam: "Попытка сохранить null storage для команды!"
+  ErrorSavingTeamData: "Ошибка при сохранении данных команды: "
+  ErrorLoadingBlockData: "Ошибка при загрузке данных блока: "
+  ErrorLoadingPlayerData: "Ошибка при загрузке данных игрока: "
+  ErrorLoadingGlobalData: "Ошибка при загрузке глобальных данных: "
+  ErrorLoadingTeamData: "Ошибка при загрузке данных команды: "
+  ErrorSavingDataToFile: "Ошибка при сохранении данных в файл: "
+  ErrorLoadingDataFromFile: "Ошибка при загрузке данных из файла: "
+  ExpectedJsonObjectButGotOtherType: "Ошибка: Ожидался JSON-объект, но получен другой тип в файле "
+  ErrorLoadingRegionData: "Ошибка при загрузке данных региона: "
+  ErrorSavingRegionData: "Ошибка при сохранении данных региона: "
+  ErrorDeletingBlockData: "Ошибка при удалении данных блока: "
+  
+  # ===== TABLE GUI MESSAGES =====
+  LocationCannotBeNull: "Локация не может быть null!"
+  ClickInInventoryButNoGuiFound: "Клик в инвентаре '%s', но объект Gui не найден (игрок=%s)"
+  InvalidBlockKey: "Некорректный ключ блока: %s"
+  BlockKeyMustHave6Parts: "Ключ должен содержать 6 частей: %s"
+  WorldNotLoaded: "Мир '%s' не загружен"
+  CoordinatesMustBeNumbers: "Координаты в ключе должны быть числами: %s"
+  
+  # ===== ITEM DROPS MESSAGES =====
+  InvalidSaveDataMethod: "Неизвестный метод загрузки данных: %s"
+  NullItemStackError: "Попытка обработать null ItemStack"
+  NullStorageError: "Хранилище null, невозможно обработать предметы"
