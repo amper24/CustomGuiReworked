@@ -67,7 +67,7 @@ public class CustomTablesListener implements Listener {
         }
         if(gui.getSaveDataMethode() == 5) {
             tableGUI.removeTemporaryInventory(inventory);
-            itemDrops.ReturnItems(player, inventory);
+            itemDrops.ReturnItems(player, inventory, gui);
         } else {
             tableGUI.saveTo(player, gui, inventory);
         }

@@ -1,58 +1,58 @@
 # CustomGuiReworked
 
-Плагин для создания кастомных GUI интерфейсов в Minecraft с удобным API для других плагинов.
+Plugin for creating custom GUI interfaces in Minecraft with a convenient API for other plugins.
 
-## Возможности
+## Features
 
-- **Создание GUI** - Встроенный редактор для создания интерфейсов
-- **API для разработчиков** - Простой API для интеграции с другими плагинами
-- **Определение типов слотов** - Автоматическое определение типов слотов (дизайн, контейнер, крафт, результат, топливо)
-- **Различные типы хранения** - Блок, личное, глобальное, командное, временное
-- **Команды** - Удобные команды для управления GUI
+- **GUI Creation** - Built-in editor for creating interfaces
+- **Developer API** - Simple API for integration with other plugins
+- **Slot Type Detection** - Automatic detection of slot types (design, container, craft, result, fuel)
+- **Multiple Storage Types** - Block, personal, global, team, temporary
+- **Commands** - Convenient commands for GUI management
 
-## Установка
+## Installation
 
-1. Скачайте JAR файл
-2. Поместите в папку `plugins/`
-3. Перезапустите сервер
+1. Download the JAR file
+2. Place it in the `plugins/` folder
+3. Restart the server
 
-## Команды
+## Commands
 
-- `/gui create <название>` - Создать новый GUI
-- `/gui edit <название>` - Редактировать GUI
-- `/gui open <название>` - Открыть GUI
-- `/gui delete <название>` - Удалить GUI
-- `/gui reload` - Перезагрузить плагин
+- `/gui create <name>` - Create a new GUI
+- `/gui edit <name>` - Edit GUI
+- `/gui open <name>` - Open GUI
+- `/gui delete <name>` - Delete GUI
+- `/gui reload` - Reload plugin
 
-## API для разработчиков
+## API for Developers
 
 ```java
-// Проверить доступность API
+// Check API availability
 if (!CustomGuiAPI.isInitialized()) {
     return;
 }
 
-// Создать GUI
+// Create GUI
 Gui gui = CustomGuiAPI.createGui("shop");
-gui.setTitle("Магазин");
+gui.setTitle("Shop");
 gui.setSlots(27);
 CustomGuiAPI.saveGui(gui);
 
-// Открыть для игрока
+// Open for player
 CustomGuiAPI.openGui(player, "shop");
 
-// Определить тип слота
+// Determine slot type
 if (CustomGuiAPI.isDesignSlot(slot, inventory)) {
-    // Слот дизайна
+    // Design slot
 }
 ```
 
-## Требования
+## Requirements
 
 - Java 17+
 - Spigot/Paper 1.20+
-- Права администратора
+- Administrator permissions
 
-## Лицензия
+## License
 
 MIT License

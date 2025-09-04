@@ -11,7 +11,7 @@ import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.util.Vector;
 
-
+import java.util.List;
 import java.util.Random;
 
 public class ItemDrops {
@@ -24,9 +24,13 @@ public class ItemDrops {
         if (location == null || storage == null) {
             return; // Проверка на null
         }
+
         for (JsonElement element : storage) {
+            if (element == null) {
+                continue; // Пропускаем null элементы
+            }
             ItemStack itemStacks = GetItemNBT.jsonToItemStack(element.toString());
-            if (itemStacks.getType().equals(Material.AIR)) {
+            if (itemStacks == null || itemStacks.getType().equals(Material.AIR)) {
                 continue; // Пропускаем некорректные элементы
             }
             location.getWorld().dropItemNaturally(location, itemStacks); // Выбрасываем предмет на землю
@@ -36,14 +40,26 @@ public class ItemDrops {
         if (location == null || storage == null) {
             return; // Проверка на null
         }
-        for (ItemStack itemStacks : storage) {
-            if (itemStacks.getType().equals(Material.AIR)) {
+        Gui gui = plugin.manager.getGuiByFile(plugin.tableGUI.getFileNameByInventory(storage));
+        List<String> skeleton = gui.getSkeleton();
+
+        for (int i = 0; i < storage.getSize(); i++) {
+            ItemStack itemStacks = storage.getItem(i);
+            if(skeleton.get(i).contains("design")) {
+                continue;
+            }
+            if (itemStacks == null || itemStacks.getType().equals(Material.AIR)) {
                 continue; // Пропускаем некорректные элементы
             }
             location.getWorld().dropItemNaturally(location, itemStacks); // Выбрасываем предмет на землю
         }// Запускаем задачу синхронно на основном потоке
     }
-    public void ReturnItems(Player player, Inventory storage) {
+    public void ReturnItems(Player player, Inventory storage, Gui gui) {
+        // Проверяем входные параметры
+        if (player == null || storage == null) {
+            return;
+        }
+        
         // Получаем направление взгляда игрока
         Vector direction = player.getLocation().getDirection();
 
@@ -59,20 +75,28 @@ public class ItemDrops {
         // Устанавливаем стандартную скорость выброса (0.3)
         direction.multiply(0.3);
 
-        for (ItemStack item : storage) {
+        List<String> skeleton = gui.getSkeleton();
+
+        for (int i = 0; i < storage.getSize(); i++) {
+            ItemStack item = storage.getItem(i);
             // Проверяем, что предмет не null и не воздух
             if (item == null || item.getType() == Material.AIR) {
                 continue;
             }
+            if(skeleton.get(i).contains("design")) {
+                continue;
+            }
+            // Создаем копию предмета для безопасности
+            ItemStack itemCopy = item.clone();
             
             // Пытаемся добавить предмет в инвентарь игрока
-            java.util.HashMap<Integer, ItemStack> leftover = player.getInventory().addItem(item);
+            java.util.HashMap<Integer, ItemStack> leftover = player.getInventory().addItem(itemCopy);
 
             // Если в инвентаре не хватило места, выбрасываем остаток на землю
             if (!leftover.isEmpty()) {
                 for (ItemStack remainingItem : leftover.values()) {
-                    // Проверяем, что остаток не null
-                    if (remainingItem != null && remainingItem.getType() != Material.AIR) {
+                    // Проверяем, что остаток не null и не воздух
+                    if (remainingItem != null && remainingItem.getType() != Material.AIR && remainingItem.getAmount() > 0) {
                         // Выбрасываем предмет в сторону взгляда игрока
                         Item droppedItem = player.getWorld().dropItem(player.getLocation(), remainingItem);
 
