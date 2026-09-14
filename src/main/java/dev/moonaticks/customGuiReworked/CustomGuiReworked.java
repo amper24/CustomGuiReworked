@@ -26,7 +26,7 @@ import org.bukkit.service.ServiceRegistration;
 import java.io.File;
 
 /**
- * CustomGuiReworked — skeleton-based GUI framework для Paper 26.1.
+ * CustomGuiReworked — skeleton-based GUI framework для Paper 26.2.
  *
  * <p>Архитектура:
  * <ul>

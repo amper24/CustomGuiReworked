@@ -27,8 +27,8 @@ repositories {
 }
 
 dependencies {
-    // Paper API 26.1 (Java 25)
-    compileOnly("io.papermc.paper:paper-api:26.1.2.build.74-stable")
+    // Paper API 26.2 (Java 25)
+    compileOnly("io.papermc.paper:paper-api:26.2.build.123-stable")
 
     // NBTAPI — эталонный формат предметов (опционально в рантайме)
     compileOnly("de.tr7zw:item-nbt-api-plugin:2.16.0")
@@ -43,7 +43,7 @@ dependencies {
 
 tasks {
     runServer {
-        minecraftVersion("26.1")
+        minecraftVersion("26.2")
     }
 }
 

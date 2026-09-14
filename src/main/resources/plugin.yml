@@ -1,7 +1,7 @@
 name: CustomGuiReworked
 version: '${version}'
 main: dev.moonaticks.customGuiReworked.CustomGuiReworked
-api-version: '26.1'
+api-version: '26.2'
 description: Skeleton-based custom GUI framework: visual editor, pluggable storage, ItemsAdder & CraftEngine block support, library-ready API.
 author: moonaticks
 website: https://github.com/amper24/CustomGuiReworked

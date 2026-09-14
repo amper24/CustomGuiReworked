@@ -1,6 +1,6 @@
 # CustomGuiReworked
 
-Skeleton-based custom GUI framework for **Paper 26.1** (Java 25): visual
+Skeleton-based custom GUI framework for **Paper 26.2** (Java 25): visual
 in-game editor, pluggable high-performance storage, custom-block
 integration (ItemsAdder + CraftEngine) and a library-ready public API.
 
@@ -38,7 +38,7 @@ integration (ItemsAdder + CraftEngine) and a library-ready public API.
 
 | Component | Version |
 |---|---|
-| Paper | **26.1+** (Java 25) |
+| Paper | **26.2+** (Java 25) |
 | NBTAPI | optional, recommended (2.16+) |
 | ItemsAdder | optional (4.x) |
 | CraftEngine | optional (26.x) |
@@ -185,11 +185,11 @@ CustomGuiAPI.writeStorage(StorageType.GLOBAL, "", "counters",
 
 - **JDK 25**, Gradle 9 (wrapper included).
 - `./gradlew build` → `build/libs/CustomGuiReworked-2.0.0.jar`
-- `./gradlew runServer` — launches a Paper 26.1 test server.
+- `./gradlew runServer` — launches a Paper 26.2 test server.
 
 ## Changelog (2.0.0)
 
-- **Paper 26.1 / Java 25**; fixed broken CI; permission prefixes aligned
+- **Paper 26.2 / Java 25**; fixed broken CI; permission prefixes aligned
   (`cgui.*`).
 - **Storage rewrite**: in-memory cache, async coalesced saves,
   per-slot serialization, atomic writes, region cache for block storage.
