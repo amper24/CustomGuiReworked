@@ -34,7 +34,13 @@ public class GuiCommand implements CommandExecutor {
             return true;
         }
         if (args.length == 0) {
-            player.sendMessage(plugin.lang().msg("cmd.usage"));
+            // Меню управления GUI (по красоте: список, поиск, пагинация,
+            // экран опций, создание нового)
+            if (player.hasPermission("cgui.command")) {
+                plugin.manager().open(player);
+            } else {
+                player.sendMessage(plugin.lang().msg("noPermission"));
+            }
             return true;
         }
         switch (args[0].toLowerCase(Locale.ROOT)) {

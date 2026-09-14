@@ -20,3 +20,11 @@ commands:
   # (старое поведение плагина — временно setOp).
   # Рекомендуется держать false и выдавать игрокам нужные права.
   execute-as-op: false
+
+# Интеграции со скриптовыми плагинами
+# (устанавливаются рядом в plugins/ — плагин сам определит их наличие)
+integration:
+  # Skript: события on cgui open/close/click, условия, выражения, действия.
+  skript: true
+  # Denizen: события on cgui open/close/click, теги <cgui.*>.
+  denizen: true

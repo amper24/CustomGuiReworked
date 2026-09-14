@@ -97,3 +97,50 @@ STORAGE, BLOCKS. Все клики по верхнему инвентарю от
 2. `Bukkit.dispatchCommand` с плейсхолдерами `%player%`, `%slot%`;
    опционально `setOp` на время выполнения
    (`commands.execute-as-op`, по умолчанию выключено).
+
+## Меню управления
+
+`/gui` без аргументов (право `cgui.command`) открывает
+`ManagerMenu` (45 слотов):
+
+- список GUI (27/страница, пагинация; иконка = источник:
+  книга — `tables/`, стеллаж — `custom/`, глаз — только память);
+- **поиск в чате**: пока меню открыто, любое сообщение (не команда)
+  становится фильтром по имени; статус-кнопка сбрасывает поиск;
+  чат-событие асинхронное — логика выполняется на основном потоке;
+- **создание** (`cgui.create`): клик → имя в чате → `registry.create`
+  + редактор; незавершённый ввод сбрасывается при закрытии списка;
+- **опции GUI** (ПКМ): предпросмотр (обычное открытие), редактор,
+  перечитать файл, сведения, удаление (`cgui.delete`,
+  «зарядка» 5 секунд — двойной клик);
+- состояние игрока — `ManagerSession` (страница, поиск, создание,
+  подтверждение удаления); `ManagerHolder` хранит «слот → имя GUI»,
+  зафиксированное при отрисовке.
+
+## Регистрация GUI из других плагинов
+
+`Gui.Source`: `TABLE` (файл в `tables/`), `CUSTOM` (файл в
+`custom/`), `RUNTIME` (без файла). `GuiRegistry.register(gui,
+persist)` заменяет GUI с тем же именем (файл старого источника
+удаляется, пишется новый) и обновляет блок-индекс; данные
+хранилища не трогает — имя таблицы (`gui.fileName()`) не меняется,
+поэтому уже сохранённые инвентари остаются на месте.
+API: `GuiService.registerGui` / `unregisterGui` / `sourceOf` /
+`getGuis`, `openGui(player, name, StorageType)` (подмена типа
+хранилища на время одного открытия), `getOpenGui(player)`
+(карта «игрок → открытое GUI» в `GuiOpener`).
+
+## Интеграции Skript / Denizen
+
+Обе — softdepend + тумблер в `config.yml` (`integration.*`);
+регистрация происходит один раз при включении Skript/Denizen
+(слушатели `PluginEnableEvent/PluginDisableEvent` на случай,
+если скриптовый плагин включается позже).
+
+- **Skript**: события через `SimpleEvent` + `EventValues`
+  (event-player, event-string, event-number), условия/выражения/
+  действия — стандартные классы `ch.njol.skript`.
+- **Denizen**: события — подклассы `BukkitScriptEvent`,
+  регистрация `ScriptEvent.registerScriptEvent(Class)`;
+  теги — `PseudoObjectTagBase` + `TagManager.registerStaticTagBaseHandler`
+  (псевдо-объект `cgui`).

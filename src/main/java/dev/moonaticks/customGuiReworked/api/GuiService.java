@@ -49,6 +49,41 @@ public interface GuiService {
     Gui createGui(String name);
 
     /**
+     * Регистрирует GUI, созданный другим плагином. GUI сохраняется
+     * в папку {@code custom/} — переживёт рестарт сервера; хранилище
+     * (данные инвентаря) работает с ним в общем режиме.
+     *
+     * <p>Если GUI с таким именем уже существует — он заменяется.
+     *
+     * @return зарегистрированный GUI
+     */
+    Gui registerGui(Gui gui);
+
+    /**
+     * Регистрирует GUI, созданный другим плагином.
+     *
+     * @param gui     GUI
+     * @param persist true — записать в {@code custom/} (переживёт рестарт),
+     *                false — только в памяти (потеряется после перезагрузки)
+     */
+    Gui registerGui(Gui gui, boolean persist);
+
+    /**
+     * Снимает GUI, зарегистрированный через API.
+     *
+     * @param name       имя GUI
+     * @param deleteFile удалить ли файл (для персистентных GUI)
+     * @return true, если GUI существовал
+     */
+    boolean unregisterGui(String name, boolean deleteFile);
+
+    /** Происхождение GUI: «table», «custom», «runtime» или «none». */
+    String sourceOf(String name);
+
+    /** Все GUI (неизменяемый список). */
+    List<Gui> getGuis();
+
+    /**
      * Перечитывает GUI из файла.
      *
      * @return обновлённый GUI или null
@@ -72,6 +107,17 @@ public interface GuiService {
 
     /** Открывает GUI игроку, передавая локацию блока (для BLOCK-хранилища). */
     void openGui(Player player, String name, Location blockLocation);
+
+    /**
+     * Открывает GUI игроку, временно подменяя тип хранилища
+     * (например, открыть personal-GUI как TEMPORARY).
+     * Для {@link StorageType#BLOCK} локация блока всё равно передаётся
+     * отдельным вызовом с {@link Location}.
+     */
+    void openGui(Player player, String name, StorageType storageOverride);
+
+    /** GUI, который игрок открыл прямо сейчас, или null. */
+    Gui getOpenGui(Player player);
 
     // ================= блоки =================
 

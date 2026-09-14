@@ -84,10 +84,68 @@ language:
       desc: "§7Nothing is saved. Items are returned when the GUI is closed."
     current: " §a(current)"
 
+  # ---------- Management menu ----------
+  manager:
+    title:
+      list: "§8[ⒼⓊⓘ ⓂⒺ⒩⒰⒢ⓄⓇ] §fGUI list"
+      options: "§8[ⒼⓊⓘ ⓂⒺ⒩⒰⒢ⓄⓇ] §fGUI: §f%s"
+    filler: " "
+    btn:
+      search: "§bSearch"
+      searchHint: "§7Type in chat to search by name."
+      create: "§eNew GUI"
+      createHint: "§7Click and enter the name in chat."
+      reload: "§6Reload all"
+      reloadHint: "§7Re-read all GUI files."
+      status: "§fStatus"
+      prev: "§e◀ Previous page"
+      next: "§eNext page ▶"
+      page: "§fPage §6%s/%s"
+    status:
+      count: "§7GUIs: §f%s"
+      search: "§7Search: §f%s"
+      noSearch: "§7No active search"
+    gui:
+      title: "§8Title: §f%s"
+      size: "§8Size: §f%s"
+      storage: "§8Storage: §f%s"
+      blocks: "§8Bound blocks: §f%s"
+      commands: "§8Slot commands: §f%s"
+      source:
+        table: "§8Source: §fEditor (tables/)"
+        custom: "§8Source: §fPlugin (custom/)"
+        runtime: "§8Source: §fMemory (runtime)"
+      hint:
+        open: "§7Left-Click — §fopen"
+        edit: "§7Middle-Click — §fedit"
+        options: "§7Right-Click — §foptions"
+    createPrompt: "§eSend the new GUI name in chat. §c/cancel §eto abort."
+    created: "§aGUI §f%s §acreated — opening the editor."
+    reloadDone: "§aAll GUIs reloaded."
+    deleteArmed: "§cClick §fDelete §cagain within 5 seconds to confirm."
+    deleted: "§cGUI §f%s §cdeleted."
+    nameInvalid: "§cInvalid name: letters, digits, dashes and underscores only (up to 32 chars)."
+    exists: "§cA GUI with this name already exists."
+    notFound: "§cGUI not found."
+    options:
+      preview: "§2Open (preview)"
+      previewHint: "§7Opens the GUI — data is loaded and saved as usual."
+      edit: "§6Edit"
+      editHint: "§7Opens the GUI editor."
+      reload: "§bReload from file"
+      reloadHint: "§7Re-read the GUI file."
+      reloadUnavailable: "§7This GUI has no file (in-memory only)."
+      reloaded: "§aGUI reloaded."
+      info: "§fDetails"
+      delete: "§cDelete"
+      deleteHint: "§7Deletes the GUI and its file."
+      deleteHint2: "§7Storage data is kept."
+      back: "§cBack"
+
   # ---------- Commands ----------
   cmd:
     playersOnly: "§cThis command can only be run by players."
-    usage: "§cUsage: §f/gui [create|edit|open|delete|list|command|reload]"
+    usage: "§cUsage: §f/gui [create|edit|open|delete|list|command|reload] §8— §7no args opens the management menu"
     create:
       usage: "§cUsage: §f/gui create <name>"
       done: "§aGUI §f%s §a— editor opened."

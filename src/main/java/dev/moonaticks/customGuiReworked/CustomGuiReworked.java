@@ -14,9 +14,13 @@ import dev.moonaticks.customGuiReworked.gui.GuiRegistry;
 import dev.moonaticks.customGuiReworked.integration.BlockHookDispatcher;
 import dev.moonaticks.customGuiReworked.integration.BlockHookManager;
 import dev.moonaticks.customGuiReworked.codec.NbtApiItemCodec;
+import dev.moonaticks.customGuiReworked.denizen.CguiDenizenSupport;
 import dev.moonaticks.customGuiReworked.lang.LanguageManager;
 import dev.moonaticks.customGuiReworked.listeners.GuiInteractionListener;
 import dev.moonaticks.customGuiReworked.listeners.PlayerListener;
+import dev.moonaticks.customGuiReworked.manager.ManagerListener;
+import dev.moonaticks.customGuiReworked.manager.ManagerMenu;
+import dev.moonaticks.customGuiReworked.skript.SkriptSupport;
 import dev.moonaticks.customGuiReworked.storage.StorageService;
 import org.bukkit.Bukkit;
 import org.bukkit.command.PluginCommand;
@@ -46,6 +50,7 @@ public final class CustomGuiReworked extends JavaPlugin {
     private StorageService storage;
     private GuiOpener opener;
     private EditorManager editor;
+    private ManagerMenu manager;
     private BlockHookDispatcher dispatcher;
     private BlockHookManager hookManager;
     private ServiceRegistration<GuiService> serviceRegistration;
@@ -75,6 +80,7 @@ public final class CustomGuiReworked extends JavaPlugin {
 
         opener = new GuiOpener(this, registry, storage, languageManager);
         editor = new EditorManager(this, registry, languageManager);
+        manager = new ManagerMenu(this, registry, opener, editor, languageManager);
         dispatcher = new BlockHookDispatcher(this, registry, languageManager);
         hookManager = new BlockHookManager(this);
         hookManager.init(dispatcher);
@@ -82,6 +88,11 @@ public final class CustomGuiReworked extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new GuiInteractionListener(this), this);
         getServer().getPluginManager().registerEvents(new EditorListener(this, editor), this);
         getServer().getPluginManager().registerEvents(new PlayerListener(this), this);
+        getServer().getPluginManager().registerEvents(new ManagerListener(this, manager), this);
+
+        // Скриптовые интеграции (мягкие зависимости: Skript, Denizen)
+        new SkriptSupport(this).init();
+        new CguiDenizenSupport(this).init();
 
         PluginCommand guiCommand = getCommand("gui");
         if (guiCommand != null) {
@@ -163,6 +174,10 @@ public final class CustomGuiReworked extends JavaPlugin {
 
     public EditorManager editor() {
         return editor;
+    }
+
+    public ManagerMenu manager() {
+        return manager;
     }
 
     public BlockHookDispatcher dispatcher() {

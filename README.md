@@ -42,6 +42,8 @@ integration (ItemsAdder + CraftEngine) and a library-ready public API.
 | NBTAPI | optional, recommended (2.16+) |
 | ItemsAdder | optional (4.x) |
 | CraftEngine | optional (26.x) |
+| Skript | optional (2.14+; syntax, conditions, effects, events) |
+| Denizen | optional (1.3.x; script events, `<cgui.*>` tags) |
 
 ## Installation
 
@@ -50,7 +52,8 @@ integration (ItemsAdder + CraftEngine) and a library-ready public API.
 3. Start the server. Configuration is auto-created:
    - `plugins/CustomGuiReworked/config.yml` — language, autosave, options;
    - `plugins/CustomGuiReworked/lang/{en,ru}.yml` — translations;
-   - `plugins/CustomGuiReworked/tables/` — GUI definitions;
+   - `plugins/CustomGuiReworked/tables/` — GUI definitions (editor);
+   - `plugins/CustomGuiReworked/custom/` — GUI definitions registered by other plugins (API);
    - `plugins/CustomGuiReworked/data/` — storage (players, teams, globals);
    - `<world>/CustomGuiReworked/blocks/` — block storage (region files).
 
@@ -58,6 +61,7 @@ integration (ItemsAdder + CraftEngine) and a library-ready public API.
 
 | Command | Description | Permission |
 |---|---|---|
+| `/gui` | **Open the management menu** | `cgui.command` |
 | `/gui create <name>` | Create + open editor | `cgui.create` |
 | `/gui edit <name>` | Open editor | `cgui.edit` |
 | `/gui open <name>` | Open the GUI | `cgui.open` |
@@ -137,14 +141,14 @@ if (service != null) {
 ```
 
 > To resolve `GuiService` by name you only need the interface on your
-> compile classpath: `compileOnly files('libs/CustomGuiReworked-2.0.0.jar')`.
+> compile classpath: `compileOnly files('libs/CustomGuiReworked-2.1.0.jar')`.
 
 ### With the full dependency
 
 ```groovy
 dependencies {
-    compileOnly files('libs/CustomGuiReworked-2.0.0.jar')
-    // или compileOnly 'dev.moonaticks:customguireworked:2.0.0', если опубликован
+    compileOnly files('libs/CustomGuiReworked-2.1.0.jar')
+    // или compileOnly 'dev.moonaticks:customguireworked:2.1.0', если опубликован
 }
 ```
 
@@ -179,13 +183,151 @@ CustomGuiAPI.writeStorage(StorageType.GLOBAL, "", "counters",
 | `GuiCloseEvent` | fired after close (save already scheduled) |
 | `GuiSlotClickEvent` | fired per slot click; cancelling blocks bound commands |
 
+### Registering GUIs from another plugin
+
+GUIs built at runtime by other plugins can be registered through the API.
+Registered GUIs are **persisted** (written to `custom/*.yml`) and survive
+server restarts — exactly like editor-created ones, but in a separate
+folder so `/gui delete` in the editor and API ownership stay unambiguous.
+
+```java
+// once, e.g. in onEnable (CustomGuiReworked must be in softdepend)
+Gui gui = GuiBuilder.named("auction")
+        .title("§6Auction House")
+        .size(54)
+        .slots(List.of(10, 11, 12, 13, 14, 15, 16, 28, 29, 30, 31, 32, 33, 34, 35, 46, 47, 48), SlotType.CONTAINER)
+        .storage(StorageType.GLOBAL)
+        .design(4, new ItemStack(Material.BEACON))
+        .build();
+
+// persist=true — saved to custom/auction.yml (default)
+CustomGuiAPI.registerGui(gui);
+// persist=false — lives in memory only (fresh state after every restart)
+CustomGuiAPI.registerGui(gui, false);
+
+// open / use exactly like any other GUI
+CustomGuiAPI.openGui(player, "auction");
+List<ItemStack> saved = CustomGuiAPI.readStorage(StorageType.GLOBAL, "", "auction");
+```
+
+Useful additions:
+
+- `registerGui(gui)` **replaces** an existing GUI with the same name
+  (the old file is removed, the new one is written) — safe to call on
+  every `onEnable` to keep the definition in sync with your plugin version;
+- `unregisterGui(name, deleteFile)` — remove it again;
+- `sourceOf(name)` — `"table"` / `"custom"` / `"runtime"` / `"none"`;
+- `getOpenGui(player)` — the GUI a player has open right now, or `null`;
+- `openGui(player, name, StorageType.TEMPORARY)` — open a GUI with a
+  temporary storage override (items returned on close, nothing saved).
+
+---
+
+## Skript support
+
+With **Skript** (2.14+) installed, the following syntax becomes available
+(toggle: `integration.skript` in `config.yml`):
+
+**Events** (values: `event-player`, `event-string` = GUI name,
+`event-number` = slot for click):
+
+```skript
+on cgui open:
+    broadcast "A player opened the %event-string% GUI"
+
+on cgui click:
+    if %event-player% has permission "shop.special":
+        send "You clicked slot %event-number% in %event-string%"
+```
+
+**Conditions:**
+
+```skript
+if %player% has a cgui open:
+    # ...
+if cgui "shop" exists:
+    # ...
+if %player%'s cgui is "shop":
+    # ...
+```
+
+**Expressions:**
+
+| Syntax | Returns |
+|---|---|
+| `all cguis` / `all cgui names` | list of all GUI names |
+| `cgui of %player%` | name of the GUI the player has open |
+| `cgui size of %string%` | slot count |
+| `cgui title of %string%` | title |
+| `cgui storage of %string%` | storage id |
+| `cgui item in slot %number% of %string% for %player%` | item from storage |
+| `all cgui items of %string% for %player%` | all items from storage |
+
+**Effects:**
+
+```skript
+open cgui "shop" to player
+open cgui "shop" to player with storage temporary
+close cgui of player
+```
+
+## Denizen support
+
+With **Denizen** (1.3.x) installed, scripts get (toggle:
+`integration.denizen` in `config.yml`):
+
+**Events:**
+
+```dsc
+on cgui open:
+    - narrate "<context.player> opened <context.gui>"
+
+on cgui click:
+    - narrate "slot <context.slot>"
+```
+
+**Tags:**
+
+| Tag | Returns |
+|---|---|
+| `<cgui.guis>` | list of all GUI names |
+| `<cgui.exists[<name>]>` | boolean |
+| `<cgui.size[<name>]>` | slot count |
+| `<cgui.title[<name>]>` | title |
+| `<cgui.storage[<name>]>` | storage id |
+| `<cgui.open_of[<player>]>` | GUI open by the player (`none` if none) |
+
+Denizen scripts can also just run the Bukkit command:
+`- execute <context.player> 'gui open shop'`.
+
 ---
 
 ## Building
 
 - **JDK 25**, Gradle 9 (wrapper included).
-- `./gradlew build` → `build/libs/CustomGuiReworked-2.0.0.jar`
+- `./gradlew build` → `build/libs/CustomGuiReworked-2.1.0.jar`
 - `./gradlew runServer` — launches a Paper 26.2 test server.
+
+## Changelog (2.1.0)
+
+- **Management menu** — bare `/gui` opens an in-game manager: paginated
+  list, live chat search, create/reload, per-GUI options screen
+  (preview / edit / reload / details / delete with confirm).
+- **API-registered GUIs** — `registerGui(gui[, persist])` /
+  `unregisterGui(...)` / `sourceOf(...)` / `getGuis()`; plugin-created
+  GUIs are persisted to `custom/*.yml` and survive restarts;
+  `openGui(player, name, StorageType)` — storage-type override on open;
+  `getOpenGui(player)` — GUI open right now.
+- **Skript support** (optional): `on cgui open/close/click` events,
+  conditions (`player has a cgui open`, `cgui x exists`, …), expressions
+  (`all cguis`, `cgui of player`, sizes/titles/storage, items from
+  storage), effects (`open cgui x to player [with storage y]`,
+  `close cgui of player`).
+- **Denizen support** (optional): `on cgui open/close/click` script
+  events and `<cgui.*>` tags (`guis`, `exists`, `size`, `title`,
+  `storage`, `open_of`).
+- `config.yml`: `integration.skript` / `integration.denizen` toggles;
+  `plugin.yml`: Skript and Denizen added to softdepend.
 
 ## Changelog (2.0.0)
 

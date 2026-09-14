@@ -83,15 +83,7 @@ public final class CustomGuiAPI {
     }
 
     public static List<Gui> getAllGuis() {
-        GuiService current = service();
-        List<Gui> list = new ArrayList<>();
-        for (String name : current.getGuiNames()) {
-            Gui gui = current.getGui(name);
-            if (gui != null) {
-                list.add(gui);
-            }
-        }
-        return list;
+        return new ArrayList<>(service().getGuis());
     }
 
     public static int getGuiCount() {
@@ -105,6 +97,34 @@ public final class CustomGuiAPI {
     /** Флюентный конструктор GUI. */
     public static GuiBuilder builder(String name) {
         return GuiBuilder.named(name);
+    }
+
+    /**
+     * Регистрирует GUI из другого плагина (сохраняется в {@code custom/}
+     * и переживает рестарт; данные хранилища для него работают как обычно).
+     * Если GUI с таким именем уже есть — он заменяется.
+     */
+    public static Gui registerGui(Gui gui) {
+        return service().registerGui(gui);
+    }
+
+    /**
+     * Регистрирует GUI из другого плагина.
+     *
+     * @param persist false — GUI живёт только в памяти (без файла)
+     */
+    public static Gui registerGui(Gui gui, boolean persist) {
+        return service().registerGui(gui, persist);
+    }
+
+    /** Снимает GUI, зарегистрированный через API. */
+    public static boolean unregisterGui(String name, boolean deleteFile) {
+        return service().unregisterGui(name, deleteFile);
+    }
+
+    /** Происхождение GUI: «table», «custom», «runtime» или «none». */
+    public static String sourceOf(String name) {
+        return service().sourceOf(name);
     }
 
     public static boolean deleteGui(String name) {
@@ -123,6 +143,15 @@ public final class CustomGuiAPI {
 
     public static void openGui(Player player, String name, Location blockLocation) {
         service().openGui(player, name, blockLocation);
+    }
+
+    public static void openGui(Player player, String name, StorageType storageOverride) {
+        service().openGui(player, name, storageOverride);
+    }
+
+    /** GUI, который игрок открыл прямо сейчас, или null. */
+    public static Gui getOpenGui(Player player) {
+        return service().getOpenGui(player);
     }
 
     /** Создаёт GUI (если нет) и сразу открывает его игроку. */

@@ -6,11 +6,11 @@ description: Skeleton-based custom GUI framework: visual editor, pluggable stora
 author: moonaticks
 website: https://github.com/amper24/CustomGuiReworked
 
-softdepend: [NBTAPI, ItemsAdder, CraftEngine]
+softdepend: [NBTAPI, ItemsAdder, CraftEngine, Skript, Denizen]
 
 commands:
   gui:
-    description: Manage custom GUIs
+    description: Manage custom GUIs (no args opens the management menu)
     usage: /gui [create|edit|open|delete|list|command|reload]
 
 permissions:

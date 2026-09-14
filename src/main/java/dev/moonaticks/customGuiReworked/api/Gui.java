@@ -36,6 +36,19 @@ public class Gui {
     private static final int MIN_SLOTS = 9;
     private static final int MAX_SLOTS = 54;
 
+    /**
+     * Происхождение GUI — определяет, в какой папке лежит файл
+     * (для {@link #source()} без файла — только память).
+     */
+    public enum Source {
+        /** Файл в папке {@code tables/} (создан редактором или унаследован от 1.x). */
+        TABLE,
+        /** Файл в папке {@code custom/} (зарегистрирован другим плагином через API). */
+        CUSTOM,
+        /** Только в памяти (зарегистрирован кодом без персистентности). */
+        RUNTIME
+    }
+
     private String name;
     private String title = "Custom GUI";
     private int slots = 27;
@@ -45,6 +58,7 @@ public class Gui {
     private StorageType storage = StorageType.TEMPORARY;
     private List<SlotCommand> commands = new ArrayList<>();
     private final Set<String> blockIds = new LinkedHashSet<>();
+    private Source source = Source.TABLE;
 
     /**
      * @param name имя GUI (с или без «.yml», с любыми символами — оно будет нормализовано)
@@ -129,6 +143,16 @@ public class Gui {
         }
         this.design = newDesign;
         this.commands.removeIf(c -> c.slot() < 0 || c.slot() >= clamped);
+        return this;
+    }
+
+    /** Происхождение GUI (см. {@link Source}). */
+    public Source source() {
+        return source;
+    }
+
+    public Gui source(Source source) {
+        this.source = source == null ? Source.TABLE : source;
         return this;
     }
 

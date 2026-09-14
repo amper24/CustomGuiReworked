@@ -21,6 +21,10 @@ import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.scoreboard.Team;
 
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+
 /**
  * Открытие и закрытие GUI: сборка инвентаря по скелету/дизайну/данным,
  * события API, снапшот при закрытии.
@@ -34,6 +38,14 @@ public class GuiOpener {
     private final StorageService storage;
     private final LanguageManager lang;
     private final ItemDrops drops = new ItemDrops();
+
+    /** GUI, открытые прямо сейчас (игрок → GUI). */
+    private final Map<UUID, Gui> openGuis = new ConcurrentHashMap<>();
+
+    /** GUI, который игрок открыл сейчас, или null. */
+    public Gui guiOf(UUID playerId) {
+        return playerId == null ? null : openGuis.get(playerId);
+    }
 
     public GuiOpener(CustomGuiReworked plugin, GuiRegistry registry, StorageService storage, LanguageManager lang) {
         this.plugin = plugin;
@@ -57,6 +69,18 @@ public class GuiOpener {
      * @param blockLocation локация блока (обязательна для BLOCK-хранилища, игнорируется иначе)
      */
     public void openForPlayer(Player player, Gui gui, Location blockLocation) {
+        openForPlayer(player, gui, blockLocation, null);
+    }
+
+    /**
+     * Открывает GUI.
+     *
+     * @param player          игрок
+     * @param gui             GUI
+     * @param blockLocation   локация блока (обязательна для BLOCK-хранилища, игнорируется иначе)
+     * @param storageOverride временный тип хранилища (null — тип самого GUI)
+     */
+    public void openForPlayer(Player player, Gui gui, Location blockLocation, StorageType storageOverride) {
         if (player == null || gui == null) {
             return;
         }
@@ -65,7 +89,7 @@ public class GuiOpener {
             return;
         }
 
-        StorageType type = gui.storage();
+        StorageType type = storageOverride != null ? storageOverride : gui.storage();
         StorageKey key = null;
         switch (type) {
             case BLOCK -> {
@@ -100,6 +124,7 @@ public class GuiOpener {
         if (event.isCancelled()) {
             return;
         }
+        openGuis.put(player.getUniqueId(), gui);
         player.openInventory(inventory);
     }
 
@@ -141,7 +166,9 @@ public class GuiOpener {
         if (inventory == null) {
             return;
         }
-        if (gui.storage() == StorageType.TEMPORARY) {
+        openGuis.remove(player.getUniqueId(), gui);
+        StorageKey key = holder.key();
+        if (key.type() == StorageType.TEMPORARY) {
             drops.returnToPlayer(player, inventory, gui);
             player.sendMessage(lang.msg("interface.temporaryReturned"));
         } else {
@@ -149,14 +176,14 @@ public class GuiOpener {
             for (int i = 0; i < gui.slots(); i++) {
                 snapshot[i] = gui.slotType(i) == SlotType.DESIGN ? "" : Codecs.encode(inventory.getItem(i));
             }
-            storage.update(holder.key(), snapshot);
-            storage.saveNow(holder.key());
+            storage.update(key, snapshot);
+            storage.saveNow(key);
         }
         Bukkit.getPluginManager().callEvent(new GuiCloseEvent(player, gui, inventory));
     }
 
     /** Команда игрока по scoreboard (fallback — «default»). */
-    static String teamOf(Player player) {
+    public static String teamOf(Player player) {
         Team team = player.getScoreboard().getPlayerTeam(player);
         return team == null ? "default" : team.getName();
     }

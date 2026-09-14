@@ -52,6 +52,35 @@ public class GuiServiceImpl implements GuiService {
     }
 
     @Override
+    public Gui registerGui(Gui gui) {
+        return registerGui(gui, true);
+    }
+
+    @Override
+    public Gui registerGui(Gui gui, boolean persist) {
+        if (gui == null) {
+            return null;
+        }
+        plugin.registry().register(gui, persist);
+        return gui;
+    }
+
+    @Override
+    public boolean unregisterGui(String name, boolean deleteFile) {
+        return plugin.registry().unregister(name, deleteFile);
+    }
+
+    @Override
+    public String sourceOf(String name) {
+        return plugin.registry().sourceOf(name);
+    }
+
+    @Override
+    public List<Gui> getGuis() {
+        return plugin.registry().all();
+    }
+
+    @Override
     public Gui loadGui(String name) {
         return plugin.registry().reload(name);
     }
@@ -86,6 +115,21 @@ public class GuiServiceImpl implements GuiService {
             return;
         }
         plugin.opener().openForPlayer(player, gui, blockLocation);
+    }
+
+    @Override
+    public void openGui(Player player, String name, StorageType storageOverride) {
+        Gui gui = getGui(name);
+        if (gui == null) {
+            player.sendMessage(plugin.lang().msg("cmd.guiNotFound", name));
+            return;
+        }
+        plugin.opener().openForPlayer(player, gui, null, storageOverride);
+    }
+
+    @Override
+    public Gui getOpenGui(Player player) {
+        return plugin.opener().guiOf(player == null ? null : player.getUniqueId());
     }
 
     // ================= блоки =================

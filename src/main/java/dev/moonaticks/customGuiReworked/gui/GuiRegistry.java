@@ -21,8 +21,15 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Реестр GUI: загрузка/сохранение файлов {@code tables/*.yml},
- * O(1)-поиск по имени и по ID кастомного блока.
+ * Реестр GUI: загрузка/сохранение файлов и O(1)-индексы.
+ *
+ * <p>Две папки:
+ * <ul>
+ *   <li>{@code tables/} — GUI, созданные в редакторе (и унаследованные от 1.x);</li>
+ *   <li>{@code custom/} — GUI, зарегистрированные другими плагинами через API
+ *       ({@link Gui.Source#CUSTOM}). Путь к данным хранилища совпадает —
+ *       данные «переехавших» GUI сохраняются.</li>
+ * </ul>
  *
  * <p>Читает как новый, так и старый формат файлов (поле «saveDataMethod»,
  * «commandExecutor», «customBlockIDs», legacy-дизайн без тега кодека).
@@ -30,38 +37,54 @@ import java.util.concurrent.ConcurrentHashMap;
 public class GuiRegistry {
 
     private final CustomGuiReworked plugin;
-    private final File dir;
+    private final File tableDir;
+    private final File customDir;
     private final Map<String, Gui> guis = new ConcurrentHashMap<>();
     private final Map<String, Gui> blockIndex = new ConcurrentHashMap<>();
 
     public GuiRegistry(CustomGuiReworked plugin) {
         this.plugin = plugin;
-        this.dir = new File(plugin.getDataFolder(), "tables");
+        this.tableDir = new File(plugin.getDataFolder(), "tables");
+        this.customDir = new File(plugin.getDataFolder(), "custom");
     }
 
-    public File directory() {
-        return dir;
+    public File tableDirectory() {
+        return tableDir;
     }
 
-    /** Загружает (или перечитывает) все GUI из папки tables/. */
+    public File customDirectory() {
+        return customDir;
+    }
+
+    /** Папка, в которую сохраняется GUI с данным происхождением. */
+    private File directoryFor(Gui gui) {
+        return gui.source() == Gui.Source.CUSTOM ? customDir : tableDir;
+    }
+
+    /** Загружает (или перечитывает) все GUI из папок tables/ и custom/. */
     public synchronized void loadAll() {
         guis.clear();
         blockIndex.clear();
-        File[] files = dir.listFiles((d, name) -> name.toLowerCase(Locale.ROOT).endsWith(".yml"));
-        if (files != null) {
+        int loaded = 0;
+        for (File dir : new File[]{tableDir, customDir}) {
+            File[] files = dir.listFiles((d, name) -> name.toLowerCase(Locale.ROOT).endsWith(".yml"));
+            if (files == null) {
+                continue;
+            }
             for (File file : files) {
                 try {
                     Gui gui = loadFromFile(file);
                     if (gui != null) {
                         guis.put(gui.name(), gui);
                         reindexBlocks(gui);
+                        loaded++;
                     }
                 } catch (Exception e) {
                     plugin.getLogger().severe("Failed to load GUI " + file.getName() + ": " + e.getMessage());
                 }
             }
         }
-        plugin.getLogger().info("Loaded " + guis.size() + " GUI(s) from " + dir);
+        plugin.getLogger().info("Loaded " + loaded + " GUI(s) from " + tableDir + " and " + customDir);
     }
 
     public Gui get(String name) {
@@ -75,7 +98,18 @@ public class GuiRegistry {
         return Collections.unmodifiableSet(guis.keySet());
     }
 
-    /** Создаёт GUI с параметрами по умолчанию (если ещё не существует). */
+    /** Все GUI (неизменяемый список). */
+    public List<Gui> all() {
+        return new ArrayList<>(guis.values());
+    }
+
+    /** Происхождение GUI: table / custom / runtime / none. */
+    public String sourceOf(String name) {
+        Gui gui = get(name);
+        return gui == null ? "none" : gui.source().name().toLowerCase(Locale.ROOT);
+    }
+
+    /** Создаёт GUI с параметрами по умолчанию (папка tables/, если ещё не существует). */
     public Gui create(String name) {
         String normalized = Gui.normalizeName(name);
         Gui existing = guis.get(normalized);
@@ -84,13 +118,61 @@ public class GuiRegistry {
         }
         Gui gui = new Gui(normalized);
         gui.title(normalized);
+        gui.source(Gui.Source.TABLE);
         guis.put(normalized, gui);
         save(gui);
         return gui;
     }
 
     /**
-     * Удаляет GUI и его файл. Данные хранилища (data/, блоки) не удаляются.
+     * Регистрирует GUI, созданный другим плагином (API).
+     *
+     * <p>Если GUI с таким именем уже существует — он заменяется
+     * (файл старого происхождения удаляется, пишется новый).
+     *
+     * @param gui     GUI (имя нормализуется не нужно — конструктор сам)
+     * @param persist true — сохранить в {@code custom/} (переживёт рестарт),
+     *                false — только в памяти (потеряется после перезагрузки)
+     */
+    public synchronized Gui register(Gui gui, boolean persist) {
+        if (gui == null) {
+            return null;
+        }
+        Gui old = guis.get(gui.name());
+        if (old != null) {
+            deleteFileOf(old);
+        }
+        gui.source(persist ? Gui.Source.CUSTOM : Gui.Source.RUNTIME);
+        guis.put(gui.name(), gui);
+        reindexBlocks(gui);
+        if (persist) {
+            writeToFile(gui);
+        }
+        return gui;
+    }
+
+    /**
+     * Снимает GUI, зарегистрированный через API.
+     *
+     * @param deleteFile удалить ли файл (актуально для {@link Gui.Source#CUSTOM})
+     * @return true, если GUI существовал
+     */
+    public synchronized boolean unregister(String name, boolean deleteFile) {
+        Gui gui = get(name);
+        if (gui == null) {
+            return false;
+        }
+        guis.remove(gui.name());
+        blockIndex.values().removeIf(g -> g == gui);
+        if (deleteFile) {
+            deleteFileOf(gui);
+        }
+        return true;
+    }
+
+    /**
+     * Удаляет GUI и его файл (редактор / команда /gui delete).
+     * Данные хранилища (data/, блоки) не удаляются.
      *
      * @return true, если GUI существовал
      */
@@ -101,20 +183,29 @@ public class GuiRegistry {
         }
         guis.remove(gui.name());
         blockIndex.values().removeIf(g -> g == gui);
-        File file = new File(dir, gui.fileName());
-        if (file.exists() && !file.delete()) {
-            plugin.getLogger().warning("Could not delete " + file);
-        }
+        deleteFileOf(gui);
         return true;
     }
 
-    /** Сохраняет GUI в файл и обновляет индексы. */
+    /** Сохраняет GUI в файл (по папке происхождения) и обновляет индексы. */
     public void save(Gui gui) {
         if (gui == null) {
             return;
         }
+        if (gui.source() == Gui.Source.RUNTIME) {
+            guis.put(gui.name(), gui);
+            reindexBlocks(gui);
+            return;
+        }
+        writeToFile(gui);
+        guis.put(gui.name(), gui);
+        reindexBlocks(gui);
+    }
+
+    private void writeToFile(Gui gui) {
+        File dir = directoryFor(gui);
         if (!dir.exists() && !dir.mkdirs()) {
-            plugin.getLogger().warning("Could not create tables folder " + dir);
+            plugin.getLogger().warning("Could not create folder " + dir);
             return;
         }
         YamlConfiguration config = new YamlConfiguration();
@@ -122,6 +213,7 @@ public class GuiRegistry {
         config.set("title", gui.title());
         config.set("slots", gui.slots());
         config.set("storage", gui.storage().id());
+        config.set("source", gui.source().name().toLowerCase(Locale.ROOT));
         List<String> skeleton = new ArrayList<>(gui.slots());
         for (SlotType type : gui.skeleton()) {
             skeleton.add(type.name().toLowerCase(Locale.ROOT));
@@ -143,17 +235,25 @@ public class GuiRegistry {
         } catch (Exception e) {
             plugin.getLogger().severe("Failed to save GUI " + gui.name() + ": " + e.getMessage());
         }
-        guis.put(gui.name(), gui);
-        reindexBlocks(gui);
+    }
+
+    private void deleteFileOf(Gui gui) {
+        if (gui.source() == Gui.Source.RUNTIME) {
+            return;
+        }
+        File file = new File(directoryFor(gui), gui.fileName());
+        if (file.exists() && !file.delete()) {
+            plugin.getLogger().warning("Could not delete " + file);
+        }
     }
 
     /** Перечитывает один GUI из файла. */
     public Gui reload(String name) {
         Gui gui = get(name);
-        if (gui == null) {
+        if (gui == null || gui.source() == Gui.Source.RUNTIME) {
             return null;
         }
-        File file = new File(dir, gui.fileName());
+        File file = new File(directoryFor(gui), gui.fileName());
         if (!file.exists()) {
             return null;
         }
@@ -205,6 +305,7 @@ public class GuiRegistry {
         Gui gui = new Gui(name);
         gui.title(config.getString("title", name));
         gui.slots(config.getInt("slots", 27));
+        gui.source(sourceOf(file, config));
 
         if (config.isString("storage")) {
             gui.storage(StorageType.fromId(config.getString("storage")));
@@ -269,7 +370,6 @@ public class GuiRegistry {
                 plugin.getLogger().warning("Skipping malformed command entry in " + file.getName());
             }
         }
-        // replaceCommands через внутреннее API
         for (SlotCommand command : commands) {
             gui.addCommand(command);
         }
@@ -282,6 +382,19 @@ public class GuiRegistry {
             gui.addBlockId(id);
         }
         return gui;
+    }
+
+    private Gui.Source sourceOf(File file, YamlConfiguration config) {
+        String explicit = config.getString("source", "").toLowerCase(Locale.ROOT);
+        if ("custom".equals(explicit)) {
+            return Gui.Source.CUSTOM;
+        }
+        if ("table".equals(explicit)) {
+            return Gui.Source.TABLE;
+        }
+        // Фолбэк — по папке
+        File parent = file.getParentFile();
+        return parent != null && parent.equals(customDir) ? Gui.Source.CUSTOM : Gui.Source.TABLE;
     }
 
     private static int intValue(Object value, int defaultValue) {
