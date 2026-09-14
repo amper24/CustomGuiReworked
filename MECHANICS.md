@@ -1,201 +1,99 @@
-# 🎮 CustomGuiReworked - Plugin Mechanics
+# CustomGuiReworked — механики
 
-Detailed description of all mechanics and systems of the CustomGuiReworked plugin.
+## Скелет (тип слотов)
 
-## 📋 **GUI System**
+Каждый GUI описывает **скелет** — тип для каждого слота:
 
-### Creation and Editing
-- **Built-in Editor** - Creating GUI through `/gui create` and `/gui edit` commands
-- **Visual Editing** - Placing items in slots through interface
-- **Property Configuration** - Setting title, size, commands for slots
-- **File Saving** - Each GUI is saved in a separate YAML file
+| Тип | Поведение |
+|---|---|
+| `DESIGN` | декорация; содержимое из `design` GUI; клики запрещены |
+| `CONTAINER` | полноценный слот хранилища |
+| `CRAFT` | слот «крафта» (семаантика для кастомных систем) |
+| `RESULT` | предметы можно только забирать (постановка блокируется, включая drag) |
+| `FUEL` | как CONTAINER, для механик «топлива» |
 
-### Inventory Types
-- **9 slots** (1 row) - For simple menus
-- **18 slots** (2 rows) - For small interfaces  
-- **27 slots** (3 rows) - Standard size
-- **36 slots** (4 rows) - Extended interfaces
-- **45 slots** (5 rows) - Large menus
-- **54 slots** (6 rows) - Maximum size
+Тип слота читается из `skeleton` в `tables/<name>.yml`
+(старые значения `design_0`, `container_3` и т.п. распознаются).
 
-## 💾 **Data Storage System**
+## Хранилище
 
-### 5 Storage Types
-
-| Type | Description | Usage |
-|------|-------------|-------|
-| **Block** | Data bound to specific block | Chests, furnaces, workbenches |
-| **Personal** | Data unique for each player | Personal inventories, settings |
-| **Global** | Shared data for all players | Common shops, banks |
-| **Team** | Data for player groups | Clan storages |
-| **Temporary** | Data only for session duration | Temporary menus, forms |
-
-### Saving Mechanics
-- **Automatic saving** when content changes
-- **Data loading** when opening GUI
-- **Synchronization** between players for shared inventories
-
-## 🎯 **Command System**
-
-### Slot Commands
-- **Command execution** when clicking on slot
-- **Variable support** (%player%, %slot%, %item%)
-- **Conditional execution** - commands only under certain conditions
-- **Console commands** - execution on behalf of server
-
-### Command Examples
-```yaml
-commands:
-  - command: "give %player% diamond 1"
-    slot: 10
-    condition: "has_permission"
-  - command: "teleport %player% spawn"
-    slot: 15
+```
+StorageKey = (StorageType, owner, table)
+  BLOCK    owner = "world:x,y,z"
+  PERSONAL owner = имя игрока
+  TEAM     owner = команда (scoreboard, fallback "default")
+  GLOBAL   owner = ""
+  TEMPORARY owner = UUID игрока (диск не используется)
 ```
 
-## 🔍 **SlotTypeAPI - Slot Type Detection**
+Слой `StorageService`:
 
-### Automatic Detection
+1. `load(key)` — из кэша (`StorageView`), при промахе — с диска;
+2. `updateSlot(key, slot, payload)` — меняется один слот массива,
+   помечается `dirty`, пишется асинхронно (коалесинг: один write
+   на всплеск изменений);
+3. `saveNow(key)` — гарантированная запись (close/quit);
+4. автосейв каждые `storage.autosave-ticks`;
+5. `flushAll()` — синхронный flush при `onDisable`.
 
-| Type | Description | Behavior |
-|------|-------------|----------|
-| **DESIGN** | Decorative slots | Cannot interact |
-| **CONTAINER** | Storage slots | Full interaction |
-| **CRAFT** | Crafting/recipe slots | Limited interaction |
-| **RESULT** | Crafting result slots | Only item retrieval |
-| **FUEL** | Fuel slots | Fuel validity check |
+Форматы на диске (совместимы с путями 1.x):
 
-### Standard Inventory Support
-- **Crafting Table** - Crafting slots and result
-- **Furnace** - Ingredient, fuel, result
-- **Brewing Stand** - Potions, fuel, bottles
-- **Anvil** - Items and result
-- **Enchanting Table** - Item and lapis
+- `data/players/<игрок>_<таблица>` — JSON-массив строк;
+- `data/teams/<команда>_<таблица>`;
+- `data/globals/<таблица>`;
+- `<мир>/CustomGuiReworked/blocks/<x/16>_<z/16>.json` —
+  `{ "world:x,y,z": { "tables": { "<таблица>": ["n1:...", ...] } } }`.
 
-### Heuristics for Custom Inventories
-- **Size analysis** of inventory
-- **Pattern detection** of layout
-- **Result caching** for performance
+Все записи атомарны (`.tmp` + move). Блок-регионы кешируются в памяти
+с локом на регион.
 
-## 🔧 **Developer API**
+Миграция 1.x: элементы-объекты (старый NBTAPI-JSON) конвертируются
+при чтении через `LegacyPayloads` и записываются обратно в новом
+формате. Без NBTAPI — упрощённый разбор (тип, количество, damage,
+название, lore, CMD).
 
-### Static API (CustomGuiAPI)
-```java
-// Simple calls without getting plugin instance
-CustomGuiAPI.createGui("shop");
-CustomGuiAPI.openGui(player, "shop");
-CustomGuiAPI.isDesignSlot(slot, inventory);
-```
+## Кодеки предметов
 
-### Internal API (ApiManager)
-- **Direct access** to plugin managers
-- **Extended capabilities** for complex integration
-- **Full control** over functionality
+Payload = `<тег>:<данные>`:
 
-## 🎨 **Design System**
+- `n1:` — NBTAPI (`NBTContainer.setItemStack/getItemStack`);
+- `b1:` — Bukkit `ItemFactory.serializeItem/deserializeItem` + Gson.
 
-### Appearance Configuration
-- **Titles** with color codes (§6, §a, §c)
-- **Background** - placing decorative items
-- **Icons** - items for buttons and elements
-- **Color scheme** - using colored glass, wool
+Тег фиксируется при записи → данные читаются тем кодеком, которым
+записаны, независимо от активного кодека. Активный кодек выбирается
+при включении: NBTAPI есть → `n1`, нет → `b1` (с предупреждением).
 
-### Interactive Elements
-- **Buttons** - slots with commands
-- **Information panels** - data display
-- **Navigation** - menu transitions
-- **Forms** - player data input
+## Блоки (ItemsAdder / CraftEngine)
 
-## 🔄 **Event System**
+`BlockHookManager` при включении: для каждого установленного
+плагина (ItemsAdder, CraftEngine) **рефлективно** загружает хук и
+регистрирует его слушатели. Без плагина — класс не загружается,
+жёсткой зависимости нет.
 
-### Interaction Handling
-- **InventoryClickEvent** - slot clicks
-- **InventoryOpenEvent** - GUI opening
-- **InventoryCloseEvent** - GUI closing
-- **BlockBreakEvent** - breaking blocks with GUI
+- Интеракция (ItemsAdder — любой клик по custom block; CraftEngine —
+  только правый клик) → `dispatcher.onBlockInteract`: GUI по ID блока
+  (реестр O(1), без учёта регистра, fallback на суффикс после `:`) →
+  `GuiOpener.openForPlayer(player, gui, blockLocation)` → событие
+  отменяется.
+- Разрушение блока → предметы всех таблиц блока дропаются, данные
+  удаляются, открытые интерфейсы этого блока закрываются.
 
-### Custom Events
-- **GuiOpenEvent** - custom GUI opening
-- **GuiCloseEvent** - custom GUI closing
-- **SlotClickEvent** - click on specific slot
+## Редактор
 
-## 🛡️ **Security System**
+`EditorSession` (на игрока): GUI + активный промпт
+(`TITLE` / `BLOCK_ID`). Экраны: MAIN, SIZE, SKELETON, DESIGN,
+STORAGE, BLOCKS. Все клики по верхнему инвентарю отменяются по
+умолчанию; DESIGN-слоты на экране DESIGN разрешают работу с
+предметами (пересъёмка дизайна на следующем тике). Чат-промпты
+отменяются сообщением `/cancel`. Каждое действие сразу
+`registry.save(gui)`.
 
-### Checks and Restrictions
-- **Access rights** - permission checking
-- **Data validation** - correctness verification
-- **Exploit protection** - bug prevention
-- **Logging** - action recording for debugging
+## Команды слотов
 
-## ⚡ **Performance Optimization**
+`/gui command add <slot> <gui> [delay] <cmd...>` →
+`SlotCommand(slot, command, delay)`. При клике:
 
-### Caching
-- **Slot type cache** - fast access to information
-- **GUI cache** - loaded interfaces in memory
-- **Lazy loading** - loading on demand
-
-### Memory Management
-- **Auto-cleanup** - removing unused data
-- **Size limitation** - preventing memory leaks
-- **Asynchronous operations** - non-blocking operations
-
-## 🌐 **Multilingual Support**
-
-### Language Support
-- **English** - primary language
-- **Russian** - additional language
-- **Translation system** - easy to add new languages
-
-### Localization
-- **Messages** - translation of all texts
-- **Commands** - support for different languages
-- **Documentation** - help translation
-
-## 🔧 **Integration with Other Plugins**
-
-### API Capabilities
-- **GUI creation** from other plugins
-- **Data management** - reading/writing content
-- **Event handling** - reacting to player actions
-- **Functionality extension** - adding new capabilities
-
-### Integration Examples
-
-| Plugin | Application | Examples |
-|--------|-------------|----------|
-| **Economy Plugins** | Shops with prices | Vault, Essentials |
-| **Warp Systems** | Teleportation menus | Essentials, Multiverse |
-| **Clan Systems** | Clan management | Factions, Clans |
-| **Mini-games** | Game interfaces | Custom mini-games |
-
-## 📊 **Performance**
-
-### Metrics
-- **GUI loading time**: < 50ms
-- **Memory per GUI**: ~2-5KB
-- **Concurrent users support**: 1000+
-- **Compatibility**: 99% of plugins
-
-### Optimizations
-- **Lazy initialization** - loading only when needed
-- **Object pooling** - object reuse
-- **Asynchronous processing** - non-blocking operations
-- **Smart caching** - cache with TTL
-
-## 🚀 **Advanced Features**
-
-### Advanced Functions
-- **Dynamic GUIs** - real-time content changes
-- **Conditional logic** - showing elements by conditions
-- **Animations** - smooth transitions and effects
-- **Web integration** - connection with web services
-
-### Future Plans
-- **Visual constructor** - drag-and-drop interface
-- **GUI templates** - ready-made designs
-- **Plugin marketplace** - GUI exchange between servers
-- **Mobile support** - management through app
-
----
-
-**CustomGuiReworked** is a powerful and flexible tool for creating custom interfaces in Minecraft that combines ease of use with professional capabilities! 🎮✨
+1. `GuiSlotClickEvent` (отмена → команды не выполняются);
+2. `Bukkit.dispatchCommand` с плейсхолдерами `%player%`, `%slot%`;
+   опционально `setOp` на время выполнения
+   (`commands.execute-as-op`, по умолчанию выключено).

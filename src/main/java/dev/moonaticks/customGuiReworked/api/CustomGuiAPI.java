@@ -1,271 +1,161 @@
 package dev.moonaticks.customGuiReworked.api;
 
-import dev.moonaticks.customGuiReworked.CustomGuiReworked;
-import dev.moonaticks.customGuiReworked.tools.Gui;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
-import org.bukkit.inventory.Inventory;
+import org.bukkit.inventory.ItemStack;
 
+import java.util.ArrayList;
 import java.util.List;
-import java.util.UUID;
+import java.util.Set;
 
 /**
- * Статический API класс для CustomGuiReworked
- * Предоставляет простой доступ к функциональности плагина
+ * Статический фасад публичного API.
+ *
+ * <p>Для плагин-разработчиков, добавивших CustomGuiReworked как
+ * compileOnly-зависимость, это самый удобный способ доступа.
+ * Библиотеки без зависимости от классов плагина должны использовать
+ * {@link GuiService} через Bukkit Services API.
+ *
+ * <pre>{@code
+ * // создать GUI программно
+ * Gui gui = GuiBuilder.named("shop")
+ *         .title("§6Shop")
+ *         .size(27)
+ *         .slot(10, SlotType.CONTAINER)
+ *         .slot(11, SlotType.CONTAINER)
+ *         .slot(20, SlotType.CONTAINER)
+ *         .design(0, new ItemStack(Material.GRAY_STAINED_GLASS_PANE))
+ *         .storage(StorageType.PERSONAL)
+ *         .build();
+ * CustomGuiAPI.saveGui(gui);
+ *
+ * // открыть
+ * CustomGuiAPI.openGui(player, "shop");
+ * }</pre>
  */
-public class CustomGuiAPI {
-    private static CustomGuiReworked plugin;
-    private static ApiManager apiManager;
+public final class CustomGuiAPI {
 
-    /**
-     * Инициализация API (вызывается автоматически плагином)
-     */
-    public static void initialize(CustomGuiReworked mainPlugin) {
-        plugin = mainPlugin;
-        apiManager = mainPlugin.apiManager;
+    private static volatile GuiService service;
+
+    private CustomGuiAPI() {
     }
 
-    /**
-     * Проверить, инициализирован ли API
-     */
+    /** Внутренний метод: вызывается плагином при включении. */
+    public static void initialize(GuiService impl) {
+        service = impl;
+    }
+
+    /** Внутренний метод: вызывается плагином при выключении. */
+    public static void shutdown() {
+        service = null;
+    }
+
+    /** Инициализирован ли API (плагин включён). */
     public static boolean isInitialized() {
-        return plugin != null && apiManager != null;
+        return service != null;
     }
 
     /**
-     * Получить экземпляр плагина
+     * Актуальный экземпляр сервиса.
+     *
+     * @throws IllegalStateException если плагин не включён
      */
-    public static CustomGuiReworked getPlugin() {
-        return plugin;
+    public static GuiService service() {
+        GuiService current = service;
+        if (current == null) {
+            throw new IllegalStateException("CustomGuiReworked is not enabled (service not registered)");
+        }
+        return current;
     }
 
-    /**
-     * Получить API менеджер
-     */
-    public static ApiManager getApiManager() {
-        return apiManager;
+    // ================= GUI =================
+
+    public static Gui getGui(String name) {
+        return service().getGui(name);
     }
 
-    // ========== GUI УПРАВЛЕНИЕ ==========
-
-    /**
-     * Проверить, существует ли GUI
-     */
-    public static boolean guiExists(String guiName) {
-        checkInitialization();
-        return apiManager.guiExists(guiName);
+    public static boolean guiExists(String name) {
+        return service().getGui(name) != null;
     }
 
-    /**
-     * Получить GUI по имени
-     */
-    public static Gui getGui(String guiName) {
-        checkInitialization();
-        return apiManager.getGui(guiName);
+    public static Set<String> getGuiNames() {
+        return service().getGuiNames();
     }
 
-    /**
-     * Получить список всех GUI
-     */
     public static List<Gui> getAllGuis() {
-        checkInitialization();
-        return apiManager.getAllGuis();
-    }
-
-    /**
-     * Создать новый GUI
-     */
-    public static Gui createGui(String guiName) {
-        checkInitialization();
-        return apiManager.createGui(guiName);
-    }
-
-    /**
-     * Удалить GUI
-     */
-    public static boolean deleteGui(String guiName) {
-        checkInitialization();
-        return apiManager.deleteGui(guiName);
-    }
-
-    /**
-     * Сохранить GUI
-     */
-    public static void saveGui(Gui gui) {
-        checkInitialization();
-        apiManager.saveGui(gui);
-    }
-
-    // ========== ОТКРЫТИЕ GUI ==========
-
-    /**
-     * Открыть GUI для игрока
-     */
-    public static void openGui(Player player, String guiName) {
-        checkInitialization();
-        apiManager.openGui(player, guiName);
-    }
-
-    /**
-     * Открыть GUI для игрока с указанием блока
-     */
-    public static void openGui(Player player, String guiName, Location blockLocation) {
-        checkInitialization();
-        apiManager.openGui(player, guiName, blockLocation);
-    }
-
-    // ========== ИГРОКИ ==========
-
-    /**
-     * Получить последний GUI игрока
-     */
-    public static Gui getLastGui(Player player) {
-        checkInitialization();
-        return apiManager.getLastGui(player);
-    }
-
-    /**
-     * Получить последний GUI по UUID
-     */
-    public static Gui getLastGui(UUID playerUUID) {
-        checkInitialization();
-        return apiManager.getLastGui(playerUUID);
-    }
-
-    // ========== БЛОКИ ==========
-
-    /**
-     * Установить GUI для блока
-     */
-    public static void setBlockGui(Location location, String guiName) {
-        checkInitialization();
-        apiManager.setBlockGui(location, guiName);
-    }
-
-    /**
-     * Получить GUI блока
-     */
-    public static Gui getBlockGui(Location location) {
-        checkInitialization();
-        return apiManager.getBlockGui(location);
-    }
-
-    /**
-     * Удалить GUI блока
-     */
-    public static void removeBlockGui(Location location) {
-        checkInitialization();
-        apiManager.removeBlockGui(location);
-    }
-
-    /**
-     * Проверить, есть ли у блока GUI
-     */
-    public static boolean hasBlockGui(Location location) {
-        checkInitialization();
-        return apiManager.hasBlockGui(location);
-    }
-
-    // ========== ИНВЕНТАРИ ==========
-
-    /**
-     * Получить общий инвентарь
-     */
-    public static Inventory getSharedInventory(String key) {
-        checkInitialization();
-        return apiManager.getSharedInventory(key);
-    }
-
-    /**
-     * Добавить общий инвентарь
-     */
-    public static void addSharedInventory(String key, Inventory inventory) {
-        checkInitialization();
-        apiManager.addSharedInventory(key, inventory);
-    }
-
-    /**
-     * Удалить общий инвентарь
-     */
-    public static void removeSharedInventory(String key) {
-        checkInitialization();
-        apiManager.removeSharedInventory(key);
-    }
-
-    /**
-     * Получить ключ инвентаря
-     */
-    public static String getInventoryKey(Inventory inventory) {
-        checkInitialization();
-        return apiManager.getInventoryKey(inventory);
-    }
-
-    // ========== УТИЛИТЫ ==========
-
-    /**
-     * Перезагрузить все GUI
-     */
-    public static void reloadAllGuis() {
-        checkInitialization();
-        apiManager.reloadAllGuis();
-    }
-
-    /**
-     * Проверить инициализацию API
-     */
-    private static void checkInitialization() {
-        if (!isInitialized()) {
-            throw new IllegalStateException("CustomGuiAPI не инициализирован! Убедитесь, что плагин CustomGuiReworked загружен.");
+        GuiService current = service();
+        List<Gui> list = new ArrayList<>();
+        for (String name : current.getGuiNames()) {
+            Gui gui = current.getGui(name);
+            if (gui != null) {
+                list.add(gui);
+            }
         }
+        return list;
     }
 
-    // ========== УДОБНЫЕ МЕТОДЫ ==========
-
-    /**
-     * Быстрое создание и открытие GUI
-     */
-    public static void createAndOpenGui(Player player, String guiName) {
-        checkInitialization();
-        Gui gui = createGui(guiName);
-        if (gui != null) {
-            openGui(player, guiName);
-        }
-    }
-
-    /**
-     * Быстрое создание и открытие GUI с блоком
-     */
-    public static void createAndOpenGui(Player player, String guiName, Location blockLocation) {
-        checkInitialization();
-        Gui gui = createGui(guiName);
-        if (gui != null) {
-            openGui(player, guiName, blockLocation);
-        }
-    }
-
-    /**
-     * Проверить, открыт ли у игрока GUI
-     */
-    public static boolean hasOpenGui(Player player) {
-        return player.getOpenInventory() != null && 
-               player.getOpenInventory().getTopInventory() != null;
-    }
-
-    /**
-     * Получить количество созданных GUI
-     */
     public static int getGuiCount() {
-        checkInitialization();
-        return apiManager.getAllGuis().size();
+        return service().getGuiNames().size();
     }
 
-    /**
-     * Получить список имен всех GUI
-     */
-    public static List<String> getGuiNames() {
-        checkInitialization();
-        return apiManager.getAllGuis().stream()
-                .map(gui -> gui.getFile().replace(".yml", ""))
-                .toList();
+    public static Gui createGui(String name) {
+        return service().createGui(name);
+    }
+
+    /** Флюентный конструктор GUI. */
+    public static GuiBuilder builder(String name) {
+        return GuiBuilder.named(name);
+    }
+
+    public static boolean deleteGui(String name) {
+        return service().deleteGui(name);
+    }
+
+    public static void saveGui(Gui gui) {
+        service().saveGui(gui);
+    }
+
+    // ================= открытие =================
+
+    public static void openGui(Player player, String name) {
+        service().openGui(player, name);
+    }
+
+    public static void openGui(Player player, String name, Location blockLocation) {
+        service().openGui(player, name, blockLocation);
+    }
+
+    /** Создаёт GUI (если нет) и сразу открывает его игроку. */
+    public static void createAndOpenGui(Player player, String name) {
+        createGui(name);
+        openGui(player, name);
+    }
+
+    // ================= блоки =================
+
+    public static void registerBlockGui(String blockId, String guiName) {
+        service().registerBlockGui(blockId, guiName);
+    }
+
+    public static void unregisterBlockGui(String blockId) {
+        service().unregisterBlockGui(blockId);
+    }
+
+    public static Gui getBlockGui(String blockId) {
+        return service().getBlockGui(blockId);
+    }
+
+    // ================= хранилище =================
+
+    public static List<ItemStack> readStorage(StorageType type, String owner, String table) {
+        return service().readStorage(type, owner, table);
+    }
+
+    public static void writeStorage(StorageType type, String owner, String table, List<ItemStack> items) {
+        service().writeStorage(type, owner, table, items);
+    }
+
+    public static void deleteStorage(StorageType type, String owner, String table) {
+        service().deleteStorage(type, owner, table);
     }
 }

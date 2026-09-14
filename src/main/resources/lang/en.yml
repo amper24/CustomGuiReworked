@@ -1,156 +1,119 @@
 language:
-  # ===== BASIC UI ELEMENTS =====
-  error: "§c§lERROR"
-  
-  # ===== GUI TITLES =====
-  mainEditorTitle: "§8[ⒼⓊⓘ ⒺⒹⓘⓉⓄⓇ]: §f"
-  skeletonEditorTitle: "§6Skeleton GUI: §f"
-  designEditorTitle: "§aDesign GUI: §f"
-  saveDataEditorTitle: "§bSave settings: §f"
-  sizeEditorTitle: "§eSlot count: §f"
-  slotCount: "§eSlot count: §f"
-  skeletonGui: "§6Skeleton GUI: §f"
-  designGui: "§aDesign GUI: §f"
-  saveDataSettings: "§bSave Data Settings: §f"
-  
-  # ===== EDITOR BUTTONS =====
-  slotCountButton: "§e[set slot count]"
-  skeletonButton: "§6[set skeleton]"
-  designButton: "§a[set design]"
-  settingsButton: "§d[set title]"
-  saveDataButton: "§b[set save data method]"
-  showButton: "§2[show table]"
-  sizeButton: "§9[set ItemsAdder Block]"
-  
-  # ===== EDITOR GUI ELEMENTS =====
-  setSlotCount: "§eSet slot count"
-  createSkeleton: "§eCreate interface skeleton"
-  createDesign: "§eCreate interface design"
-  interfaceSettings: "§eInterface settings"
-  saveDataSettingsButton: "§eSave data settings"
-  previewInterface: "§ePreview interface"
-  configureItemsAdder: "§eConfigure ItemsAdder blocks"
-  
-  # ===== SLOT LABELS =====
-  designSlotLabel: "§aDesign Slot"
-  containerSlotLabel: "§bContainer Slot"
-  resultSlotLabel: "§eResult Slot"
-  craftSlotLabel: "§6Craft Slot"
-  fuelSlotLabel: "§cFuel Slot"
-  blockedSlot: "§eblocked"
-  
-  # ===== SLOT COUNTS =====
-  slot9: "§79 slots"
-  slot18: "§718 slots"
-  slot27: "§727 slots"
-  slot36: "§736 slots"
-  slot45: "§745 slots"
-  slot54: "§754 slots"
-  
-  # ===== SAVE METHODS =====
-  blockSaveLabel: "§eBlock save"
-  playerSaveLabel: "§ePlayer save"
-  globalSaveLabel: "§eGlobal save for players"
-  teamSaveLabel: "§eTeam save"
-  noSaveLabel: "§eNo save"
-  
-  # ===== COMMAND MESSAGES =====
-  CommandError: "§cUse: §f/gui [create/open/delete/edit/reload]"
-  CommandSetCommandError: "§cUse: §f/gui command [add/get/delete] <slot> <interface_name> \"<command>\""
-  CommandDeleteCommandError: "§cUse: §f/gui delete <interface_name> [confirm]"
-  CommandEditCommandError: "§cUse: §f/gui edit <interface_name>"
-  CommandCreateCommandError: "§cUse: §f/gui create <interface_name>"
-  CommandAddError: "§cUse: §f/gui command add <slot> <interface_name> \"<command>\""
-  CommandGetError: "§cUse: §f/gui command get <slot> <interface_name>"
-  CommandDeleteError: "§cUse: §f/gui command delete <slot> <interface_name> <index>"
-  WrongUsage: "§cWrong usage, usage: §f/gui [create/open/delete/edit/reload/command]"
-  
-  # ===== SUCCESS MESSAGES =====
-  DeleteSuccess: "§aInterface §f%s §awas deleted!"
-  ReloadSuccess: "§aTranslations reloaded successfully!"
-  CommandAddSuccess: "§aCommand added to slot: §f%s"
-  CommandGetSuccess: "§aCommand get from slot: §f%s"
-  CommandDeleteSuccess: "§aCommand deleted from slot: §f%s"
-  titleSet: "§aInterface table title set to: §f"
-  TableTitleSet: "§eTable title set to: §f%s"
-  BlockIdRemoved: "§eBlock ID removed: §f%s"
-  BlockIdAdded: "§eBlock ID added: §f%s"
-  Deleted: "§aDeleted!"
-  
-  # ===== ERROR MESSAGES =====
-  NoPermission: "§cYou don't have permission to use this command"
-  InterfaceNotFound: "§cInterface not found!"
-  ErrorSet: "§cUse: §f/gui edit <interface_name>"
-  ErrorOpen: "§cInterface not found!"
-  SlotsError: "§cSlots must be a number!"
-  DelayError: "§cDelay must be a number!"
-  IndexError: "§cIndex must be a number!"
-  PlayersOnly: "§cThis command can only be run by players."
-  
-  # ===== INTERFACE MESSAGES =====
-  Interface: "§aInterface: §f%s"
-  notFound: "§cNot found!"
-  setTitle: "§eSend the interface table title in chat"
-  SendTableTitle: "§eSend the interface table title in chat"
-  SendBlockId: "§eSend the block ID in chat"
-  
-  # ===== COMMAND LIST MESSAGES =====
-  CommandList: "§aList of commands for the table: §f%s"
-  SlotCommand: "§aFor command on slot: §f%s"
-  Delay: "§6Delay: §f%s"
-  CommandNotFound: "§cCommand on slot §f%s §afor interface §f%s §cnot found!"
-  CommandValue: "§aCommand on slot §f%s §afor interface §f%s §ahas value: §f%s"
-  CommandListHeader: "§e################################"
-  CommandListTitle: "§aList of commands for table §f%s §afor slot §f%s"
-  CommandListFormat: "§e%s §f- %s"
-  CommandListFooter: "§e################################"
-  
-  # ===== TABLE GUI MESSAGES =====
-  BlockInventoryError: "§cBlock inventory cannot be opened by command"
-  NoBlockSelected: "§cYou haven't selected a block!"
-  
-  # ===== GUI ERROR MESSAGES =====
-  InterfaceBrokenSkeleton: "§cInterface is broken. Skeleton not loaded"
-  InterfaceBrokenCount: "§cInterface is broken. Count doesn't match"
-  InterfaceBrokenDesigns: "§cInterface is broken. Designs not loaded"
-  
-  # ===== MANAGER MESSAGES =====
-  FolderCreated: "GUI folder created!"
-  GuiFilePathNotSet: "GUI file path is not set!"
-  
-  # ===== DATABASE MANAGER MESSAGES =====
-  FailedToSaveNullStorage: "Failed to save null storage to block!"
-  PlayerDidNotClickBlock: "Player did not click on block!"
-  WorldNotFoundForBlock: "World for block not found!"
-  ErrorSavingDataToBlock: "Error saving data to block: "
-  AttemptToSaveNullStorageForPlayer: "Attempt to save null storage for player!"
-  ErrorSavingPlayerData: "Error saving player data: "
-  AttemptToSaveNullStorageGlobally: "Attempt to save null storage globally!"
-  ErrorSavingGlobalData: "Error saving global data: "
-  AttemptToSaveNullStorageForTeam: "Attempt to save null storage for team!"
-  ErrorSavingTeamData: "Error saving team data: "
-  ErrorLoadingBlockData: "Error loading block data: "
-  ErrorLoadingPlayerData: "Error loading player data: "
-  ErrorLoadingGlobalData: "Error loading global data: "
-  ErrorLoadingTeamData: "Error loading team data: "
-  ErrorSavingDataToFile: "Error saving data to file: "
-  ErrorLoadingDataFromFile: "Error loading data from file: "
-  ExpectedJsonObjectButGotOtherType: "Error: Expected JSON object but got other type in file "
-  ErrorLoadingRegionData: "Error loading region data: "
-  ErrorSavingRegionData: "Error saving region data: "
-  ErrorDeletingBlockData: "Error deleting block data: "
-  
-  # ===== TABLE GUI MESSAGES =====
-  LocationCannotBeNull: "Location cannot be null!"
-  ClickInInventoryButNoGuiFound: "Click in inventory '%s' but no Gui object found (player=%s)"
-  InvalidBlockKey: "Invalid block key: %s"
-  BlockKeyMustHave6Parts: "Key must contain 6 parts: %s"
-  WorldNotLoaded: "World '%s' is not loaded"
-  CoordinatesMustBeNumbers: "Coordinates in key must be numbers: %s"
-  
-  # ===== ITEM DROPS MESSAGES =====
-  InvalidSaveDataMethod: "Unknown data loading method: %s"
-  NullItemStackError: "Attempted to process null ItemStack"
-  NullStorageError: "Storage is null, cannot process items"
+  # ---------- Common ----------
+  noPermission: "§cYou don't have permission to do that."
+  interface:
+    broken:
+      skeleton: "§cThis interface is broken: the skeleton is not loaded correctly."
+    blockNoLocation: "§cThis GUI uses block storage, but no block was provided."
+    temporaryReturned: "§eYour temporary items were returned."
 
-  
+  # ---------- Editor ----------
+  editor:
+    mainTitle: "§8[ⒼⓊⓘ ⒺⒹⓘⓉⓄⓇ] §f%s"
+    sizeTitle: "§eSlots: §f%s"
+    skeletonTitle: "§6Skeleton: §f%s"
+    designTitle: "§aDesign: §f%s"
+    storageTitle: "§bStorage: §f%s"
+    blocksTitle: "§dBlocks: §f%s"
+    filler: " "
+    btn:
+      size: "§eSlot count"
+      skeleton: "§6Slot types (skeleton)"
+      design: "§aDesign"
+      title: "§dTitle"
+      storage: "§bData storage"
+      preview: "§2Preview"
+      blocks: "§dCustom blocks"
+      back: "§cBack"
+      delete: "§cDelete this GUI"
+    info:
+      name: "§fSummary"
+      size: "§7Size: §f%s"
+      storage: "§7Storage: §f%s"
+      type: "§7%s: §f%d"
+      commands: "§7Commands: §f%s"
+      blocks: "§7Bound blocks: §f%s"
+    size:
+      option: "§f%s slots"
+    skeleton:
+      hint1: "§7Click — switch type"
+      hint2: "§7Shift-Click — set Design"
+    design:
+      empty: "§7Empty"
+      locked: "§cLocked (skeleton slot)"
+      lockedClick: "§cThis slot is part of the skeleton. Use §6Slot types §cto change it."
+    blocks:
+      add: "§eAdd block ID"
+      removeHint: "§7Right-Click — unbind"
+    titlePrompt: "§eSend the new GUI title in chat. §c/cancel §eto abort."
+    blockPrompt: "§eSend the custom block ID in chat (ItemsAdder/CraftEngine). §c/cancel §eto abort."
+    promptCancelled: "§cPrompt cancelled."
+    titleSet: "§aTitle set: §f%s"
+    blockAdded: "§aBlock bound: §f%s"
+    blockRemoved: "§aBlock unbound: §f%s"
+    blockAlready: "§eBlock already bound: §f%s"
+    sizeChanged: "§aSize set to: §f%s slots."
+    storageChanged: "§aStorage set to: §f%s."
+    saved: "§aDesign saved."
+    deleted: "§aGUI §f%s §adeleted."
+
+  # ---------- Slot types ----------
+  slot:
+    design: "§aDesign"
+    container: "§bContainer"
+    craft: "§6Craft"
+    result: "§eResult"
+    fuel: "§cFuel"
+
+  # ---------- Storage types ----------
+  storage:
+    block:
+      name: "§eBlock storage"
+      desc: "§7Data is saved to the block (world, x, y, z). Breaking the block drops the items."
+    personal:
+      name: "§ePlayer storage"
+      desc: "§7Every player has their own copy."
+    global:
+      name: "§eGlobal storage"
+      desc: "§7All players share one storage."
+    team:
+      name: "§eTeam storage"
+      desc: "§7Players in the same Bukkit team share one storage."
+    temporary:
+      name: "§eTemporary (not saved)"
+      desc: "§7Nothing is saved. Items are returned when the GUI is closed."
+    current: " §a(current)"
+
+  # ---------- Commands ----------
+  cmd:
+    playersOnly: "§cThis command can only be run by players."
+    usage: "§cUsage: §f/gui [create|edit|open|delete|list|command|reload]"
+    create:
+      usage: "§cUsage: §f/gui create <name>"
+      done: "§aGUI §f%s §a— editor opened."
+    edit:
+      usage: "§cUsage: §f/gui edit <name>"
+    open:
+      usage: "§cUsage: §f/gui open <name>"
+    delete:
+      usage: "§cUsage: §f/gui delete <name>"
+      done: "§aGUI §f%s §adeleted."
+    guiNotFound: "§cGUI not found: §f%s"
+    list:
+      header: "§eGUIs (%s):"
+      empty: "§7No GUIs exist yet."
+      item: "§8- §f%s"
+    numberRequired: "§cThat value must be a number!"
+    reload:
+      done: "§aPlugin reloaded (config, language, GUIs)."
+    cmd:
+      usage: "§cUsage: §f/gui command [add|get|delete] <slot> <gui> [delay] <command...>"
+      added: "§aCommand added to slot §f%s."
+      deleted: "§aCommand deleted from slot §f%s."
+      notFound: "§cCommand not found in slot §f%s."
+      value: "§aSlot §f%s§a: §f%s §7(delay %s)"
+      listHeader: "§aCommands for §f%s §ain slot §f%s:"
+      listItem: "§e#%s §f- %s §7(delay %s)"
+      listFooter: "§e--------------------------------"
+      emptySlot: "§7No commands in slot §f%s."
+      slotOutOfRange: "§cSlot must be in range 0..%s."

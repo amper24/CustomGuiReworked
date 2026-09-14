@@ -1,0 +1,64 @@
+package dev.moonaticks.customGuiReworked.util;
+
+import dev.moonaticks.customGuiReworked.api.Gui;
+import dev.moonaticks.customGuiReworked.api.SlotType;
+import org.bukkit.Material;
+import org.bukkit.World;
+import org.bukkit.entity.Player;
+import org.bukkit.inventory.Inventory;
+import org.bukkit.inventory.ItemStack;
+import org.bukkit.util.Vector;
+
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Random;
+
+/**
+ * Возврат предметов игроку при закрытии временного (TEMPORARY) GUI.
+ */
+public class ItemDrops {
+
+    private final Random random = new Random();
+
+    /**
+     * Все не-дизайн предметы инвентаря возвращаются игроку:
+     * сначала в инвентарь, лишнее — дропом рядом с игроком.
+     */
+    public void returnToPlayer(Player player, Inventory inventory, Gui gui) {
+        if (player == null || inventory == null || gui == null) {
+            return;
+        }
+        World world = player.getWorld();
+        if (world == null) {
+            return;
+        }
+        Vector direction = player.getLocation().getDirection();
+        direction.add(new Vector(
+                (random.nextDouble() - 0.5) * 0.1,
+                (random.nextDouble() - 0.5) * 0.1,
+                (random.nextDouble() - 0.5) * 0.1));
+        direction.multiply(0.3);
+
+        for (int i = 0; i < inventory.getSize(); i++) {
+            if (gui.slotType(i) == SlotType.DESIGN) {
+                continue;
+            }
+            ItemStack item = inventory.getItem(i);
+            if (item == null || item.getType() == Material.AIR) {
+                continue;
+            }
+            Map<Integer, ItemStack> leftover = player.getInventory().addItem(item.clone());
+            for (ItemStack rest : leftover.values()) {
+                if (rest != null && rest.getType() != Material.AIR && rest.getAmount() > 0) {
+                    world.dropItem(player.getLocation(), rest).setVelocity(direction);
+                }
+            }
+        }
+        // Чистим инвентарь, чтобы предметы не «проявились» повторно
+        for (int i = 0; i < inventory.getSize(); i++) {
+            if (gui.slotType(i) != SlotType.DESIGN) {
+                inventory.setItem(i, null);
+            }
+        }
+    }
+}

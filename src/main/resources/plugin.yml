@@ -1,35 +1,34 @@
 name: CustomGuiReworked
-version: '1.1'
+version: '${version}'
 main: dev.moonaticks.customGuiReworked.CustomGuiReworked
-api-version: '1.21'
-depend: [NBTAPI]
-softdepend: [ItemsAdder]
-use-library-loader: true
+api-version: '26.1'
+description: Skeleton-based custom GUI framework: visual editor, pluggable storage, ItemsAdder & CraftEngine block support, library-ready API.
+author: moonaticks
+website: https://github.com/amper24/CustomGuiReworked
+
+softdepend: [NBTAPI, ItemsAdder, CraftEngine]
+
 commands:
   gui:
-    usage: /gui
-    description: Create a GUI in the database
-    parameters:
-      type:
-        description: create, edit, open, delete.
-        type: string
-    permissions: cgui.bypass
+    description: Manage custom GUIs
+    usage: /gui [create|edit|open|delete|list|command|reload]
+
 permissions:
   cgui.create:
-    description: allow create gui command
-    default: op
-  cgui.open:
-    description: allow open gui command
+    description: Allow /gui create
     default: op
   cgui.edit:
-    description: allow edit gui command
+    description: Allow /gui edit
     default: op
-  cgui.reload:
-    description: allow reload gui plugin
-    default: op
-  cgui.command:
-    description: allow to set commands in gui
+  cgui.open:
+    description: Allow /gui open
     default: op
   cgui.delete:
-    description: allow to set commands in gui
+    description: Allow /gui delete
+    default: op
+  cgui.reload:
+    description: Allow /gui reload
+    default: op
+  cgui.command:
+    description: Allow /gui command (bind/unbind slot commands)
     default: op

@@ -1,132 +1,175 @@
 package dev.moonaticks.customGuiReworked;
 
-import dev.moonaticks.customGuiReworked.commands.GuiTableCommand;
-import dev.moonaticks.customGuiReworked.commands.TableTabCompleter;
-import dev.moonaticks.customGuiReworked.listeners.BlockBreakListener;
-import dev.moonaticks.customGuiReworked.listeners.BlockClickListener;
-import dev.moonaticks.customGuiReworked.listeners.CustomTablesListener;
-import dev.moonaticks.customGuiReworked.listeners.TableEditorListener;
-import dev.moonaticks.customGuiReworked.managers.DatabaseManager;
-import dev.moonaticks.customGuiReworked.managers.EditorGUIs;
-import dev.moonaticks.customGuiReworked.managers.LanguageManager;
-import dev.moonaticks.customGuiReworked.managers.TableEditorManager;
-import dev.moonaticks.customGuiReworked.tools.ItemDrops;
-import dev.moonaticks.customGuiReworked.tools.TableGUI;
-import dev.moonaticks.customGuiReworked.api.ApiManager;
 import dev.moonaticks.customGuiReworked.api.CustomGuiAPI;
+import dev.moonaticks.customGuiReworked.api.GuiService;
+import dev.moonaticks.customGuiReworked.api.GuiServiceImpl;
+import dev.moonaticks.customGuiReworked.command.GuiCommand;
+import dev.moonaticks.customGuiReworked.command.GuiTabCompleter;
+import dev.moonaticks.customGuiReworked.codec.BukkitItemCodec;
+import dev.moonaticks.customGuiReworked.codec.Codecs;
+import dev.moonaticks.customGuiReworked.editor.EditorListener;
+import dev.moonaticks.customGuiReworked.editor.EditorManager;
+import dev.moonaticks.customGuiReworked.gui.GuiOpener;
+import dev.moonaticks.customGuiReworked.gui.GuiRegistry;
+import dev.moonaticks.customGuiReworked.integration.BlockHookDispatcher;
+import dev.moonaticks.customGuiReworked.integration.BlockHookManager;
+import dev.moonaticks.customGuiReworked.codec.NbtApiItemCodec;
+import dev.moonaticks.customGuiReworked.lang.LanguageManager;
+import dev.moonaticks.customGuiReworked.listeners.GuiInteractionListener;
+import dev.moonaticks.customGuiReworked.listeners.PlayerListener;
+import dev.moonaticks.customGuiReworked.storage.StorageService;
+import org.bukkit.Bukkit;
+import org.bukkit.command.PluginCommand;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.service.ServiceRegistration;
 
 import java.io.File;
-import java.util.Map;
-import java.util.Objects;
-import java.util.concurrent.ConcurrentHashMap;
 
+/**
+ * CustomGuiReworked — skeleton-based GUI framework для Paper 26.1.
+ *
+ * <p>Архитектура:
+ * <ul>
+ *   <li>{@link Codecs} — кодек предметов (NBTAPI-стандарт или Bukkit-fallback);</li>
+ *   <li>{@link GuiRegistry} — файлы GUI (tables/*.yml) и индексы;</li>
+ *   <li>{@link StorageService} — оптимизированное хранилище (кэш + асинхронные записи);</li>
+ *   <li>{@link GuiOpener} — открытие/закрытие интерфейсов;</li>
+ *   <li>{@link EditorManager} — визуальный редактор;</li>
+ *   <li>{@link BlockHookManager} — интеграции ItemsAdder/CraftEngine;</li>
+ *   <li>{@link GuiService} — публичный API для других плагинов.</li>
+ * </ul>
+ */
 public final class CustomGuiReworked extends JavaPlugin {
 
-    DatabaseManager databaseManager;
-    File pluginFolder = getDataFolder();
-    ItemDrops itemDrops;
+    private LanguageManager languageManager;
+    private GuiRegistry registry;
+    private StorageService storage;
+    private GuiOpener opener;
+    private EditorManager editor;
+    private BlockHookDispatcher dispatcher;
+    private BlockHookManager hookManager;
+    private ServiceRegistration<GuiService> serviceRegistration;
 
-    public TableEditorManager manager;
-    public EditorGUIs editorGUIs;
-    public TableGUI tableGUI;
-    public TableEditorListener tableEditorListener;
-    public BlockBreakListener blockBreakListener;
-
-    public GuiTableCommand guiTableCommand;
-    public TableTabCompleter tableTabCompleter;
-
-    public BlockClickListener blockClickListener;
-    public CustomTablesListener customTablesListener;
-
-    public LanguageManager languageManager;
-    public static Map<String, String> languageMap = new ConcurrentHashMap<>();
-    
-    public ApiManager apiManager;
     @Override
     public void onEnable() {
-        //Конфиг
         saveDefaultConfig();
-        //Создаем файлы переводов
         saveDefaultLanguageFiles();
-        //Язык
+
         languageManager = new LanguageManager(this);
-        languageManager.loadLanguage();
-        //Первая логика
-        itemDrops = new ItemDrops(this);
-        databaseManager = new DatabaseManager(pluginFolder, itemDrops, this);
-        //редактор столов и активатор столов
-        manager = new TableEditorManager(this, pluginFolder);
-        editorGUIs = new EditorGUIs(manager);
-        tableGUI = new TableGUI(this, manager, databaseManager);
-        //листенеры
-        tableEditorListener = new TableEditorListener(manager, editorGUIs, tableGUI, this);
-        getServer().getPluginManager().registerEvents(tableEditorListener, this);
-        blockBreakListener = new BlockBreakListener(databaseManager, tableGUI);
-        getServer().getPluginManager().registerEvents(blockBreakListener, this);
-        //Команда
-        guiTableCommand = new GuiTableCommand(this, manager, editorGUIs, tableGUI, pluginFolder);
-        tableTabCompleter = new TableTabCompleter(pluginFolder);
-        Objects.requireNonNull(getCommand("gui")).setExecutor(guiTableCommand);
-        Objects.requireNonNull(getCommand("gui")).setTabCompleter(tableTabCompleter);
-        //#################################################################################################//
-        //                     тут обработку самих столов и сделай её лучше чем раньше                     //
-        //#################################################################################################//
-        blockClickListener = new BlockClickListener(tableGUI, this, manager, blockBreakListener);
-        getServer().getPluginManager().registerEvents(blockClickListener, this);
-        customTablesListener = new CustomTablesListener(this, tableGUI, manager, databaseManager, itemDrops, pluginFolder, blockBreakListener);
-        getServer().getPluginManager().registerEvents(customTablesListener, this);
-        //#################################################################################################//
-        // Инициализация API
-        apiManager = new ApiManager(this);
-        apiManager.initialize();
-        CustomGuiAPI.initialize(this);
-        //#################################################################################################//
-        functional();
+        languageManager.load();
+
+        // Кодек предметов: NBTAPI (эталонный формат экосистемы) или Bukkit-fallback
+        if (getServer().getPluginManager().getPlugin("NBTAPI") != null) {
+            Codecs.initialize(new NbtApiItemCodec());
+            getLogger().info("Item codec: NBTAPI (tag n1)");
+        } else {
+            Codecs.initialize(new BukkitItemCodec());
+            getLogger().warning("NBTAPI not found — using Bukkit fallback item codec (tag b1). "
+                    + "Install NBTAPI for full NBT fidelity.");
+        }
+
+        registry = new GuiRegistry(this);
+        registry.loadAll();
+
+        storage = new StorageService(this);
+
+        opener = new GuiOpener(this, registry, storage, languageManager);
+        editor = new EditorManager(this, registry, languageManager);
+        dispatcher = new BlockHookDispatcher(this, registry, languageManager);
+        hookManager = new BlockHookManager(this);
+        hookManager.init(dispatcher);
+
+        getServer().getPluginManager().registerEvents(new GuiInteractionListener(this), this);
+        getServer().getPluginManager().registerEvents(new EditorListener(this, editor), this);
+        getServer().getPluginManager().registerEvents(new PlayerListener(this), this);
+
+        PluginCommand guiCommand = getCommand("gui");
+        if (guiCommand != null) {
+            guiCommand.setExecutor(new GuiCommand(this));
+            guiCommand.setTabCompleter(new GuiTabCompleter(this));
+        }
+
+        // Публичный API как библиотека: Bukkit Services + статический фасад
+        GuiService service = new GuiServiceImpl(this);
+        serviceRegistration = getServer().getServicesManager().register(GuiService.class, service, this);
+        CustomGuiAPI.initialize(service);
+
         hello();
     }
 
     @Override
     public void onDisable() {
-        // Plugin shutdown logic
-        shutDown();
-    }
-    void hello() {
-        //start image
-        getLogger().info("---------------------------------------------------------------");
-        getLogger().info("  █████ █   █ █████ █████ █████ ██   ██       █████ █   █ ███  ");
-        getLogger().info("  █     █   █ █       █   █   █ █ █ █ █       █     █   █  █   ");
-        getLogger().info("  █     █   █ █████   █   █   █ █  █  █       █ ███ █   █  █   ");
-        getLogger().info("  █     █   █     █   █   █   █ █     █       █   █ █   █  █   ");
-        getLogger().info("  █████ █████ █████   █   █████ █     █       █████ █████ ███  ");
-        getLogger().info("---------------------------------------------------------------");
-        getLogger().info("plugin is enabled");
-    }
-    void functional() {
-        manager.loadAllGuis();
-        manager.loadAllBlocks();
-    }
-    void shutDown() {
-        tableGUI.closeAllInventories();
-    }
-    
-    private void saveDefaultLanguageFiles() {
-        // Создаем папку lang если её нет
-        File langDir = new File(getDataFolder(), "lang");
-        if (!langDir.exists()) {
-            langDir.mkdirs();
-            getLogger().info("Создана папка lang");
+        if (storage != null) {
+            storage.stopAutosave();
+            storage.flushAll();
         }
-        
-        // Список файлов переводов для копирования
-        String[] languageFiles = {"en.yml", "ru.yml"};
-        
-        for (String fileName : languageFiles) {
+        if (serviceRegistration != null) {
+            serviceRegistration.unregister();
+            serviceRegistration = null;
+        }
+        CustomGuiAPI.shutdown();
+        Codecs.reset();
+    }
+
+    /** Перезагрузка конфигурации, языка и GUI (команда /gui reload). */
+    public void reloadPluginData() {
+        reloadConfig();
+        languageManager.load();
+        registry.loadAll();
+    }
+
+    private void hello() {
+        getLogger().info("-------------------------------------------------------------");
+        getLogger().info(" CustomGuiReworked " + getDescription().getVersion() + " enabled");
+        getLogger().info(" GUIs: " + registry.names().size() + ", language: " + languageManager.language());
+        getLogger().info("-------------------------------------------------------------");
+    }
+
+    private void saveDefaultLanguageFiles() {
+        File langDir = new File(getDataFolder(), "lang");
+        if (!langDir.exists() && !langDir.mkdirs()) {
+            getLogger().warning("Could not create lang folder " + langDir);
+        }
+        for (String fileName : new String[]{"en.yml", "ru.yml"}) {
             File langFile = new File(langDir, fileName);
             if (!langFile.exists()) {
-                saveResource("lang/" + fileName, false);
-                getLogger().info("Создан файл перевода: " + fileName);
+                try {
+                    saveResource("lang/" + fileName, false);
+                    getLogger().info("Created language file: " + fileName);
+                } catch (IllegalArgumentException ignored) {
+                    // файл отсутствует в ресурсах
+                }
             }
         }
+    }
+
+    // ================= доступ к компонентам =================
+
+    public LanguageManager lang() {
+        return languageManager;
+    }
+
+    public GuiRegistry registry() {
+        return registry;
+    }
+
+    public StorageService storage() {
+        return storage;
+    }
+
+    public GuiOpener opener() {
+        return opener;
+    }
+
+    public EditorManager editor() {
+        return editor;
+    }
+
+    public BlockHookDispatcher dispatcher() {
+        return dispatcher;
+    }
+
+    public BlockHookManager hooks() {
+        return hookManager;
     }
 }
