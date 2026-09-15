@@ -5,6 +5,7 @@ import ch.njol.skript.lang.util.SimpleEvent;
 import ch.njol.skript.registrations.EventValues;
 import ch.njol.skript.util.Getter;
 import dev.moonaticks.customGuiReworked.api.event.GuiCloseEvent;
+import dev.moonaticks.customGuiReworked.api.event.GuiDragEvent;
 import dev.moonaticks.customGuiReworked.api.event.GuiOpenEvent;
 import dev.moonaticks.customGuiReworked.api.event.GuiSlotClickEvent;
 import org.bukkit.entity.Player;
@@ -29,6 +30,7 @@ public final class CguiSkriptEvents {
         Skript.registerEvent("cgui open", SimpleEvent.class, GuiOpenEvent.class, "[cgui] open");
         Skript.registerEvent("cgui close", SimpleEvent.class, GuiCloseEvent.class, "[cgui] close");
         Skript.registerEvent("cgui click", SimpleEvent.class, GuiSlotClickEvent.class, "[cgui] click");
+        Skript.registerEvent("cgui drag", SimpleEvent.class, GuiDragEvent.class, "[cgui] drag");
 
         EventValues.registerEventValue(GuiOpenEvent.class, Player.class, new Getter<Player, GuiOpenEvent>() {
             @Override
@@ -52,6 +54,19 @@ public final class CguiSkriptEvents {
         EventValues.registerEventValue(GuiCloseEvent.class, String.class, new Getter<String, GuiCloseEvent>() {
             @Override
             public String get(GuiCloseEvent event) {
+                return event.getGui() == null ? null : event.getGui().name();
+            }
+        }, 1);
+
+        EventValues.registerEventValue(GuiDragEvent.class, Player.class, new Getter<Player, GuiDragEvent>() {
+            @Override
+            public Player get(GuiDragEvent event) {
+                return event.getPlayer();
+            }
+        }, 0);
+        EventValues.registerEventValue(GuiDragEvent.class, String.class, new Getter<String, GuiDragEvent>() {
+            @Override
+            public String get(GuiDragEvent event) {
                 return event.getGui() == null ? null : event.getGui().name();
             }
         }, 1);

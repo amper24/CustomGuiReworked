@@ -16,6 +16,7 @@ import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.util.UUID;
 
 /**
  * Файловый бэкенд «одна таблица — один файл» (player/global/team).
@@ -24,6 +25,10 @@ import java.nio.file.StandardCopyOption;
  * Путь файла совпадает со старым форматом плагина, поэтому данные 1.x
  * читаются без переноса; элементы старого формата (объекты NBTAPI)
  * мигрируются при чтении.
+ *
+ * <p>Все вызовы выполняются на выделенном I/O-потоке {@link StorageService}
+ * (или синхронно при остановке сервера) и не должны вызываться из
+ * других потоков параллельно.
  */
 public class SimpleStorageBackend implements StorageBackend {
 
@@ -55,18 +60,19 @@ public class SimpleStorageBackend implements StorageBackend {
     }
 
     @Override
-    public String[] read(StorageKey key) {
+    public String[] read(StorageKey key) throws IOException {
         File file = fileFor(key);
         if (!file.exists()) {
             return new String[0];
         }
+        String content = Files.readString(file.toPath(), StandardCharsets.UTF_8);
+        if (content.isBlank()) {
+            return new String[0];
+        }
         try {
-            String content = Files.readString(file.toPath(), StandardCharsets.UTF_8);
-            if (content.isBlank()) {
-                return new String[0];
-            }
             JsonElement root = JsonParser.parseString(content);
             if (!root.isJsonArray()) {
+                plugin.getLogger().warning("Storage file is not a JSON array, ignoring: " + file);
                 return new String[0];
             }
             JsonArray array = root.getAsJsonArray();
@@ -79,7 +85,11 @@ public class SimpleStorageBackend implements StorageBackend {
                         || (element.isJsonPrimitive() && element.getAsString().isBlank())) {
                     payload = "";
                 } else if (element.isJsonPrimitive()) {
-                    payload = LegacyPayloads.migrate(element.getAsString());
+                    String before = element.getAsString();
+                    payload = LegacyPayloads.migrate(before);
+                    if (!payload.equals(before)) {
+                        migrated = true;
+                    }
                 } else {
                     // Старый формат: элемент — объект NBTAPI
                     payload = LegacyPayloads.migrate(element.toString());
@@ -91,58 +101,73 @@ public class SimpleStorageBackend implements StorageBackend {
                 writeFile(file, result); // фиксируем мигрированный формат
             }
             return result;
-        } catch (Exception e) {
-            plugin.getLogger().severe("Failed to read storage file " + file + ": " + e.getMessage());
+        } catch (RuntimeException e) {
+            // Битый JSON и т.п. — не теряем содержимое файла, только логируем
+            if (plugin != null) {
+                plugin.getLogger().severe("Failed to parse storage file " + file + ": " + e.getMessage());
+            }
             return new String[0];
         }
     }
 
     @Override
-    public void write(StorageKey key, String[] slots) {
+    public void write(StorageKey key, String[] slots) throws IOException {
         File file = fileFor(key);
-        boolean allEmpty = slots == null;
-        if (slots != null) {
-            for (String slot : slots) {
-                if (slot != null && !slot.isBlank()) {
-                    allEmpty = false;
-                    break;
-                }
+        if (isEmpty(slots)) {
+            if (file.exists() && !file.delete()) {
+                throw new IOException("Could not delete " + file);
             }
-        }
-        try {
-            if (allEmpty) {
-                if (file.exists() && !file.delete()) {
-                    plugin.getLogger().warning("Could not delete " + file);
-                }
-            } else {
-                writeFile(file, slots);
-            }
-        } catch (Exception e) {
-            plugin.getLogger().severe("Failed to write storage file " + file + ": " + e.getMessage());
+        } else {
+            writeFile(file, slots == null ? new String[0] : slots);
         }
     }
 
-    /** Атомарная запись: временный файл + move. */
+    private static boolean isEmpty(String[] slots) {
+        if (slots == null) {
+            return true;
+        }
+        for (String slot : slots) {
+            if (slot != null && !slot.isBlank()) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** Атомарная запись: уникальный временный файл + ATOMIC_MOVE. */
     private void writeFile(File file, String[] slots) throws IOException {
         JsonArray array = new JsonArray();
         for (String slot : slots) {
             array.add(slot == null ? "" : slot);
         }
+        File parent = file.getParentFile();
+        if (parent != null && !parent.exists() && !parent.mkdirs()) {
+            throw new IOException("Could not create folder " + parent);
+        }
         Path target = file.toPath();
-        Path tmp = target.resolveSibling(file.getName() + ".tmp");
+        // Уникальное имя tmp — параллельные записи (flush + автосейв)
+        // не затирают временные файлы друг друга.
+        Path tmp = target.resolveSibling(file.getName() + ".tmp-" + UUID.randomUUID());
         Files.writeString(tmp, GSON.toJson(array), StandardCharsets.UTF_8);
         try {
             Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
         } catch (AtomicMoveNotSupportedException e) {
             Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING);
+        } catch (IOException e) {
+            try {
+                Files.deleteIfExists(tmp);
+            } catch (IOException ignored) {
+                // best-effort cleanup
+            }
+            throw e;
         }
     }
 
     @Override
-    public void remove(StorageKey key) {
+    public void remove(StorageKey key) throws IOException {
         File file = fileFor(key);
         if (file.exists() && !file.delete()) {
-            plugin.getLogger().warning("Could not delete " + file);
+            throw new IOException("Could not delete " + file);
         }
     }
 

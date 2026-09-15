@@ -71,18 +71,23 @@ public record StorageKey(StorageType type, String owner, String table) {
         if (coords.length != 3) {
             return null;
         }
+        final int x;
+        final int y;
+        final int z;
+        try {
+            // Координаты валидируем ДО обращения к серверу — мусорный
+            // owner не должен приводить даже к поиску мира.
+            x = Integer.parseInt(coords[0].trim());
+            y = Integer.parseInt(coords[1].trim());
+            z = Integer.parseInt(coords[2].trim());
+        } catch (NumberFormatException e) {
+            return null;
+        }
         World world = Bukkit.getWorld(worldName);
         if (world == null) {
             return null;
         }
-        try {
-            return new Location(world,
-                    Integer.parseInt(coords[0]),
-                    Integer.parseInt(coords[1]),
-                    Integer.parseInt(coords[2]));
-        } catch (NumberFormatException e) {
-            return null;
-        }
+        return new Location(world, x, y, z);
     }
 
     /** Ключ личных данных игрока. */

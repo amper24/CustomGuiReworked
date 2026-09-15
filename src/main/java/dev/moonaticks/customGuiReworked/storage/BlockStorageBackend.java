@@ -6,9 +6,14 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import com.google.gson.JsonPrimitive;
 import dev.moonaticks.customGuiReworked.CustomGuiReworked;
 import dev.moonaticks.customGuiReworked.api.StorageType;
 import dev.moonaticks.customGuiReworked.codec.LegacyPayloads;
+import org.bukkit.World;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.Listener;
+import org.bukkit.event.world.WorldUnloadEvent;
 
 import java.io.File;
 import java.io.IOException;
@@ -20,7 +25,11 @@ import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Блок-хранилище: файлы регионов
@@ -31,35 +40,46 @@ import java.util.concurrent.ConcurrentHashMap;
  * { "world:x,y,z": { "tables": { "shop.yml": ["n1:{...}", ""] } } }
  * </pre>
  *
- * <p>Старый формат {@code { "world:x,y,z": { "table": "...", "storage": [...] } }}
+ * <p>Старый формат {@code { "world:x,y,z": { "table": "...", "storage": [...] }}}
  * мигрируется при чтении (ключ таблицы сохраняется без изменений).
  *
  * <p>Регионы кешируются в памяти; доступ к региону сериализован локом;
- * запись — атомарная (временный файл + move).
+ * запись регионов выполняется одним выделенным потоком с коалесингом
+ * (серия изменений региона схлопывается в один файловый write через
+ * {@link #REGION_DELAY_MS} мс) и атомарна (уникальный tmp + ATOMIC_MOVE).
  */
-public class BlockStorageBackend implements StorageBackend {
+public class BlockStorageBackend implements StorageBackend, Listener {
 
     private static final Gson GSON = new GsonBuilder().disableHtmlEscaping().create();
     private static final int REGION_SHIFT = 4; // регион 16x16
+    /** Задержка коалесинга записи региона (мс). */
+    private static final long REGION_DELAY_MS = 500;
+    /** Повторная попытка записи после ошибки ввода-вывода (мс). */
+    private static final long RETRY_DELAY_MS = 5000;
 
     private final CustomGuiReworked plugin;
     private final File dataFolder;
+    private final ScheduledExecutorService io;
     private final Map<String, RegionCache> regions = new ConcurrentHashMap<>();
+    private final Map<String, ScheduledFuture<?>> regionWrites = new ConcurrentHashMap<>();
 
     private static final class RegionCache {
+        final String key;
         final Object lock = new Object();
         final File file;
         JsonObject root = new JsonObject();
         boolean dirty;
 
-        RegionCache(File file) {
+        RegionCache(String key, File file) {
+            this.key = key;
             this.file = file;
         }
     }
 
-    public BlockStorageBackend(CustomGuiReworked plugin, File dataFolder) {
+    public BlockStorageBackend(CustomGuiReworked plugin, File dataFolder, ScheduledExecutorService io) {
         this.plugin = plugin;
         this.dataFolder = dataFolder;
+        this.io = io;
     }
 
     @Override
@@ -82,11 +102,14 @@ public class BlockStorageBackend implements StorageBackend {
 
     private RegionCache regionFor(org.bukkit.Location location) {
         File file = regionFile(location);
-        return regions.computeIfAbsent(file.getAbsolutePath(), path -> {
-            RegionCache cache = new RegionCache(file);
-            loadRegion(cache);
+        RegionCache cache = regions.get(file.getAbsolutePath());
+        if (cache != null) {
             return cache;
-        });
+        }
+        cache = new RegionCache(file.getAbsolutePath(), file);
+        loadRegion(cache);
+        RegionCache existing = regions.putIfAbsent(file.getAbsolutePath(), cache);
+        return existing != null ? existing : cache;
     }
 
     private void loadRegion(RegionCache cache) {
@@ -155,7 +178,7 @@ public class BlockStorageBackend implements StorageBackend {
                             migrated = LegacyPayloads.migrate(element.toString());
                         }
                         if (!migrated.equals(original)) {
-                            array.set(i, new com.google.gson.JsonPrimitive(migrated));
+                            array.set(i, new JsonPrimitive(migrated));
                             changed = true;
                         }
                     }
@@ -186,25 +209,27 @@ public class BlockStorageBackend implements StorageBackend {
     }
 
     @Override
-    public String[] read(StorageKey key) {
+    public String[] read(StorageKey key) throws IOException {
         org.bukkit.Location location = StorageKey.blockLocation(key.owner());
         if (location == null) {
-            return new String[0];
+            throw new IOException("Block world is not loaded or invalid owner: " + key.owner());
         }
         RegionCache cache = regionFor(location);
         synchronized (cache.lock) {
-            JsonObject block = cache.root.getAsJsonObject(key.owner());
-            if (block == null) {
+            JsonElement blockElement = cache.root.get(key.owner());
+            if (blockElement == null || !blockElement.isJsonObject()) {
                 return new String[0];
             }
-            JsonObject tables = block.has("tables") ? block.getAsJsonObject("tables") : null;
-            if (tables == null) {
+            JsonObject block = blockElement.getAsJsonObject();
+            JsonElement tablesElement = block.get("tables");
+            if (tablesElement == null || !tablesElement.isJsonObject()) {
                 return new String[0];
             }
-            JsonArray array = tables.getAsJsonArray(key.table());
-            if (array == null) {
+            JsonElement arrayElement = tablesElement.getAsJsonObject().get(key.table());
+            if (arrayElement == null || !arrayElement.isJsonArray()) {
                 return new String[0];
             }
+            JsonArray array = arrayElement.getAsJsonArray();
             String[] result = new String[array.size()];
             for (int i = 0; i < array.size(); i++) {
                 JsonElement element = array.get(i);
@@ -217,26 +242,23 @@ public class BlockStorageBackend implements StorageBackend {
     }
 
     @Override
-    public void write(StorageKey key, String[] slots) {
+    public void write(StorageKey key, String[] slots) throws IOException {
         org.bukkit.Location location = StorageKey.blockLocation(key.owner());
         if (location == null) {
-            plugin.getLogger().warning("Cannot write block storage: world is not loaded (" + key.owner() + ")");
-            return;
+            // Мир не загружен — данные НЕ должны теряться: бросаем исключение,
+            // StorageService пометит запись как грязную и повторит позже.
+            throw new IOException("Cannot write block storage: world is not loaded (" + key.owner() + ")");
         }
         RegionCache cache = regionFor(location);
         synchronized (cache.lock) {
-            JsonObject block = cache.root.getAsJsonObject(key.owner());
-            if (block == null) {
-                block = new JsonObject();
-                cache.root.add(key.owner(), block);
-            }
-            JsonObject tables;
-            if (block.has("tables") && block.get("tables").isJsonObject()) {
-                tables = block.getAsJsonObject("tables");
-            } else {
-                tables = new JsonObject();
-                block.add("tables", tables);
-            }
+            JsonElement blockElement = cache.root.get(key.owner());
+            JsonObject block = blockElement != null && blockElement.isJsonObject()
+                    ? blockElement.getAsJsonObject()
+                    : new JsonObject();
+            JsonElement tablesElement = block.get("tables");
+            JsonObject tables = tablesElement != null && tablesElement.isJsonObject()
+                    ? tablesElement.getAsJsonObject()
+                    : new JsonObject();
             boolean allEmpty = slots == null;
             JsonArray array = new JsonArray();
             if (slots != null) {
@@ -254,6 +276,9 @@ public class BlockStorageBackend implements StorageBackend {
             }
             if (tables.size() == 0) {
                 cache.root.remove(key.owner());
+            } else {
+                block.add("tables", tables);
+                cache.root.add(key.owner(), block);
             }
             cache.dirty = true;
         }
@@ -261,26 +286,28 @@ public class BlockStorageBackend implements StorageBackend {
     }
 
     @Override
-    public void remove(StorageKey key) {
+    public void remove(StorageKey key) throws IOException {
         org.bukkit.Location location = StorageKey.blockLocation(key.owner());
         if (location == null) {
-            return;
+            throw new IOException("Block world is not loaded or invalid owner: " + key.owner());
         }
         RegionCache cache = regionFor(location);
         synchronized (cache.lock) {
-            JsonObject block = cache.root.getAsJsonObject(key.owner());
-            if (block != null) {
-                if (block.has("tables") && block.get("tables").isJsonObject()) {
-                    JsonObject tables = block.getAsJsonObject("tables");
-                    tables.remove(key.table());
-                    if (tables.size() == 0) {
-                        cache.root.remove(key.owner());
-                    }
-                } else {
+            JsonElement blockElement = cache.root.get(key.owner());
+            if (blockElement == null || !blockElement.isJsonObject()) {
+                return;
+            }
+            JsonObject block = blockElement.getAsJsonObject();
+            if (block.has("tables") && block.get("tables").isJsonObject()) {
+                JsonObject tables = block.getAsJsonObject("tables");
+                tables.remove(key.table());
+                if (tables.size() == 0) {
                     cache.root.remove(key.owner());
                 }
-                cache.dirty = true;
+            } else {
+                cache.root.remove(key.owner());
             }
+            cache.dirty = true;
         }
         scheduleRegionWrite(cache);
     }
@@ -290,17 +317,23 @@ public class BlockStorageBackend implements StorageBackend {
         RegionCache cache = regionFor(location);
         List<String> out = new ArrayList<>();
         synchronized (cache.lock) {
-            JsonObject block = cache.root.getAsJsonObject(ownerKey(location));
-            if (block != null && block.has("tables") && block.get("tables").isJsonObject()) {
-                for (Map.Entry<String, JsonElement> tableEntry : block.getAsJsonObject("tables").entrySet()) {
-                    if (!tableEntry.getValue().isJsonArray()) {
-                        continue;
-                    }
-                    for (JsonElement element : tableEntry.getValue().getAsJsonArray()) {
-                        if (element != null && element.isJsonPrimitive() && !element.isJsonNull()
-                                && !element.getAsString().isBlank()) {
-                            out.add(element.getAsString());
-                        }
+            JsonElement blockElement = cache.root.get(ownerKey(location));
+            if (blockElement == null || !blockElement.isJsonObject()) {
+                return out;
+            }
+            JsonObject block = blockElement.getAsJsonObject();
+            JsonElement tablesElement = block.get("tables");
+            if (tablesElement == null || !tablesElement.isJsonObject()) {
+                return out;
+            }
+            for (Map.Entry<String, JsonElement> tableEntry : tablesElement.getAsJsonObject().entrySet()) {
+                if (!tableEntry.getValue().isJsonArray()) {
+                    continue;
+                }
+                for (JsonElement element : tableEntry.getValue().getAsJsonArray()) {
+                    if (element != null && element.isJsonPrimitive() && !element.isJsonNull()
+                            && !element.getAsString().isBlank()) {
+                        out.add(element.getAsString());
                     }
                 }
             }
@@ -319,42 +352,120 @@ public class BlockStorageBackend implements StorageBackend {
         scheduleRegionWrite(cache);
     }
 
+    // ================= запись региона (коалесинг + повтор) =================
+
     private void scheduleRegionWrite(RegionCache cache) {
-        plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
-            synchronized (cache.lock) {
-                if (!cache.dirty) {
-                    return;
-                }
-                cache.dirty = false;
-                try {
-                    writeRegionFile(cache);
-                } catch (Exception e) {
-                    cache.dirty = true;
-                    plugin.getLogger().severe("Failed to write block region " + cache.file + ": " + e.getMessage());
-                }
+        try {
+            regionWrites.computeIfAbsent(cache.key,
+                    k -> io.schedule(() -> runRegionWrite(cache, k), REGION_DELAY_MS, TimeUnit.MILLISECONDS));
+        } catch (java.util.concurrent.RejectedExecutionException e) {
+            // I/O-поток уже остановлен (shutdown): синхронный flushAll
+            // сам запишет dirty-регион.
+        }
+    }
+
+    private void scheduleRegionRetry(RegionCache cache) {
+        try {
+            regionWrites.computeIfAbsent(cache.key,
+                    k -> io.schedule(() -> runRegionWrite(cache, k), RETRY_DELAY_MS, TimeUnit.MILLISECONDS));
+        } catch (java.util.concurrent.RejectedExecutionException e) {
+            // см. scheduleRegionWrite
+        }
+    }
+
+    private void runRegionWrite(RegionCache cache, String key) {
+        regionWrites.remove(key);
+        synchronized (cache.lock) {
+            if (!cache.dirty) {
+                return;
             }
-        });
+            cache.dirty = false;
+            try {
+                writeRegionFile(cache);
+            } catch (Exception e) {
+                cache.dirty = true;
+                plugin.getLogger().severe("Failed to write block region " + cache.file + ": " + e.getMessage()
+                        + " (retry in " + (RETRY_DELAY_MS / 1000) + "s)");
+                scheduleRegionRetry(cache);
+            }
+        }
     }
 
     /** Сериализует и пишет регион (вызывается под cache.lock). */
     private void writeRegionFile(RegionCache cache) throws IOException {
         File worldFolder = cache.file.getParentFile();
         if (worldFolder != null && !worldFolder.exists() && !worldFolder.mkdirs()) {
-            plugin.getLogger().warning("Could not create folder " + worldFolder);
+            throw new IOException("Could not create folder " + worldFolder);
         }
         Path target = cache.file.toPath();
-        Path tmp = target.resolveSibling(cache.file.getName() + ".tmp");
+        Path tmp = target.resolveSibling(cache.file.getName() + ".tmp-" + UUID.randomUUID());
         Files.writeString(tmp, GSON.toJson(cache.root), StandardCharsets.UTF_8);
         try {
             Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
         } catch (AtomicMoveNotSupportedException e) {
             Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING);
+        } catch (IOException e) {
+            try {
+                Files.deleteIfExists(tmp);
+            } catch (IOException ignored) {
+                // best-effort cleanup
+            }
+            throw e;
+        }
+    }
+
+    /**
+     * При выгрузке мира флашит и выгружает его регионы из кэша,
+     * чтобы данные не висели в памяти и были на диске до повторной загрузки.
+     */
+    @EventHandler(ignoreCancelled = true)
+    public void onWorldUnload(WorldUnloadEvent event) {
+        unloadWorld(event.getWorld());
+    }
+
+    /**
+     * Флашит и выгружает регионы выгружаемого мира
+     * (обработчик {@link org.bukkit.event.world.WorldUnloadEvent}).
+     */
+    public void unloadWorld(World world) {
+        if (world == null) {
+            return;
+        }
+        String prefix = new File(world.getWorldFolder(), "CustomGuiReworked/blocks").getAbsolutePath()
+                + File.separator;
+        for (Map.Entry<String, RegionCache> entry : new ArrayList<>(regions.entrySet())) {
+            if (!entry.getKey().startsWith(prefix)) {
+                continue;
+            }
+            RegionCache cache = entry.getValue();
+            ScheduledFuture<?> future = regionWrites.remove(cache.key);
+            if (future != null) {
+                future.cancel(false);
+            }
+            synchronized (cache.lock) {
+                if (cache.dirty) {
+                    cache.dirty = false;
+                    try {
+                        writeRegionFile(cache);
+                    } catch (Exception e) {
+                        cache.dirty = true;
+                        plugin.getLogger().severe("Failed to flush block region on world unload "
+                                + cache.file + ": " + e.getMessage());
+                    }
+                }
+            }
+            regions.remove(cache.key, cache);
         }
     }
 
     @Override
-    public void flushAll() {
+    public void flushAll() throws IOException {
+        IOException firstFailure = null;
         for (RegionCache cache : regions.values()) {
+            ScheduledFuture<?> future = regionWrites.remove(cache.key);
+            if (future != null) {
+                future.cancel(false);
+            }
             synchronized (cache.lock) {
                 if (!cache.dirty) {
                     continue;
@@ -362,10 +473,17 @@ public class BlockStorageBackend implements StorageBackend {
                 cache.dirty = false;
                 try {
                     writeRegionFile(cache);
-                } catch (Exception e) {
+                } catch (IOException e) {
+                    cache.dirty = true; // не выдаём потерю за успешную запись
                     plugin.getLogger().severe("Failed to flush block region " + cache.file + ": " + e.getMessage());
+                    if (firstFailure == null) {
+                        firstFailure = e;
+                    }
                 }
             }
+        }
+        if (firstFailure != null) {
+            throw firstFailure;
         }
     }
 }

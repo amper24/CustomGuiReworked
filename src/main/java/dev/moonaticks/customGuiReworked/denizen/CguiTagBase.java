@@ -34,7 +34,8 @@ public class CguiTagBase extends PseudoObjectTagBase<CguiTagBase> {
         register();
     }
 
-    private void register() {
+    @Override
+    public void register() {
 
         // <--[tag]
         // @attribute <cgui.guis>
@@ -43,7 +44,7 @@ public class CguiTagBase extends PseudoObjectTagBase<CguiTagBase> {
         // @description Returns a list of all GUI names.
         // -->
         tagProcessor.registerTag(ListTag.class, "guis", (attribute, object) ->
-                new ListTag(plugin.registry().names().toArray(new String[0])));
+                new ListTag(plugin.registry().names()));
 
         // <--[tag]
         // @attribute <cgui.exists[<name>]>
@@ -51,8 +52,10 @@ public class CguiTagBase extends PseudoObjectTagBase<CguiTagBase> {
         // @plugin CustomGuiReworked
         // @description Returns true if a GUI with the given name exists.
         // -->
-        tagProcessor.registerTag(ElementTag.class, String.class, "exists", (attribute, object, name) ->
-                new ElementTag(String.valueOf(plugin.registry().get(name) != null)));
+        tagProcessor.registerTag(ElementTag.class, ElementTag.class, "exists", (attribute, object, name) -> {
+            String guiName = name == null ? null : name.asString();
+            return new ElementTag(guiName != null && plugin.registry().get(guiName) != null);
+        });
 
         // <--[tag]
         // @attribute <cgui.size[<name>]>
@@ -60,9 +63,9 @@ public class CguiTagBase extends PseudoObjectTagBase<CguiTagBase> {
         // @plugin CustomGuiReworked
         // @description Returns the slot count of the GUI (empty if not found).
         // -->
-        tagProcessor.registerTag(ElementTag.class, String.class, "size", (attribute, object, name) -> {
-            Gui gui = plugin.registry().get(name);
-            return new ElementTag(gui == null ? "" : String.valueOf(gui.slots()));
+        tagProcessor.registerTag(ElementTag.class, ElementTag.class, "size", (attribute, object, name) -> {
+            Gui gui = lookup(name);
+            return gui == null ? new ElementTag("") : new ElementTag(gui.slots());
         });
 
         // <--[tag]
@@ -71,9 +74,9 @@ public class CguiTagBase extends PseudoObjectTagBase<CguiTagBase> {
         // @plugin CustomGuiReworked
         // @description Returns the title of the GUI (empty if not found).
         // -->
-        tagProcessor.registerTag(ElementTag.class, String.class, "title", (attribute, object, name) -> {
-            Gui gui = plugin.registry().get(name);
-            return new ElementTag(gui == null ? "" : gui.title());
+        tagProcessor.registerTag(ElementTag.class, ElementTag.class, "title", (attribute, object, name) -> {
+            Gui gui = lookup(name);
+            return gui == null ? new ElementTag("") : new ElementTag(gui.title());
         });
 
         // <--[tag]
@@ -83,9 +86,9 @@ public class CguiTagBase extends PseudoObjectTagBase<CguiTagBase> {
         // @description Returns the storage type of the GUI
         // (block, personal, global, team or temporary; empty if not found).
         // -->
-        tagProcessor.registerTag(ElementTag.class, String.class, "storage", (attribute, object, name) -> {
-            Gui gui = plugin.registry().get(name);
-            return new ElementTag(gui == null ? "" : gui.storage().id());
+        tagProcessor.registerTag(ElementTag.class, ElementTag.class, "storage", (attribute, object, name) -> {
+            Gui gui = lookup(name);
+            return gui == null ? new ElementTag("") : new ElementTag(gui.storage().id());
         });
 
         // <--[tag]
@@ -96,10 +99,17 @@ public class CguiTagBase extends PseudoObjectTagBase<CguiTagBase> {
         // (or «none» if the player has no GUI open).
         // -->
         tagProcessor.registerTag(ElementTag.class, PlayerTag.class, "open_of", (attribute, object, player) -> {
-            Gui gui = player == null || player.getPlayer() == null
+            Gui gui = player == null || player.getPlayerEntity() == null
                     ? null
-                    : plugin.opener().guiOf(player.getPlayer().getUniqueId());
+                    : plugin.opener().guiOf(player.getPlayerEntity().getUniqueId());
             return new ElementTag(gui == null ? "none" : gui.name());
         });
+    }
+
+    private Gui lookup(ElementTag name) {
+        if (name == null) {
+            return null;
+        }
+        return plugin.registry().get(name.asString());
     }
 }

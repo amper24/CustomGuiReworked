@@ -18,16 +18,13 @@ import org.bukkit.event.Event;
 @SuppressWarnings("deprecation")
 public class ExprCguiOfPlayer extends SimpleExpression<String> {
 
-    static {
-        Skript.registerExpression(ExprCguiOfPlayer.class, String.class, ExpressionType.COMBINED,
-                "[the] cgui (of|for) %player%");
-    }
 
-    private Expression<?> player;
+    private Expression<Player> player;
 
     @Override
+    @SuppressWarnings("unchecked")
     public boolean init(Expression<?>[] exprs, int matchedPattern, Kleenean isDelayed, ParseResult parser) {
-        this.player = exprs[0];
+        this.player = (Expression<Player>) exprs[0];
         return true;
     }
 

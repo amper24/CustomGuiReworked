@@ -17,6 +17,7 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -70,6 +71,7 @@ public class ManagerMenu {
     /** Открывает список GUI. */
     public void open(Player player) {
         ManagerSession session = sessions.computeIfAbsent(player.getUniqueId(), ManagerSession::new);
+        session.inputMode(ManagerSession.InputMode.NONE);
         session.page(0);
         renderList(player, session);
     }
@@ -184,7 +186,7 @@ public class ManagerMenu {
             return;
         }
         switch (click) {
-            case LEFT, NUMBER_KEY, SHIFT_NUMBER, DOUBLE_CLICK -> {
+            case LEFT, NUMBER_KEY, SHIFT_LEFT, SHIFT_RIGHT, DOUBLE_CLICK -> {
                 if (!player.hasPermission("cgui.open")) {
                     player.sendMessage(lang.msg("noPermission"));
                     return;
@@ -276,15 +278,24 @@ public class ManagerMenu {
         }
     }
 
-    /** Клик «создать новый GUI» — запрашивает имя в чате. */
+    /** Клик «создать новый GUI» — закрываем меню и запрашиваем имя в чате. */
     public void onCreateClick(Player player) {
         if (!player.hasPermission("cgui.create")) {
             player.sendMessage(lang.msg("noPermission"));
             return;
         }
         ManagerSession session = sessions.computeIfAbsent(player.getUniqueId(), ManagerSession::new);
-        session.creating(true);
+        session.inputMode(ManagerSession.InputMode.CREATE);
+        player.closeInventory();
         player.sendMessage(lang.msg("manager.createPrompt"));
+    }
+
+    /** Клик «поиск» — закрываем меню и запрашиваем строку поиска в чате. */
+    public void onSearchClick(Player player) {
+        ManagerSession session = sessions.computeIfAbsent(player.getUniqueId(), ManagerSession::new);
+        session.inputMode(ManagerSession.InputMode.SEARCH);
+        player.closeInventory();
+        player.sendMessage(lang.msg("manager.searchPrompt"));
     }
 
     /** Клик «перезагрузить всё». */
@@ -325,21 +336,36 @@ public class ManagerMenu {
         renderList(player, session);
     }
 
-    /** Игрок ввёл текст в чате, пока меню открыто. */
+    /** Игрок ввёл текст в чате в режиме ввода (поиск/создание). */
     public void onChat(Player player, String message) {
         ManagerSession session = sessions.get(player.getUniqueId());
-        if (session == null || !isOpen(player)) {
+        if (session == null) {
             return;
         }
-        if (session.isCreating()) {
-            session.creating(false);
+        ManagerSession.InputMode mode = session.inputMode();
+        if (mode == ManagerSession.InputMode.NONE) {
+            // Обратная совместимость: чат, набранный при открытом меню, = поиск
+            if (!isOpen(player)) {
+                return;
+            }
+            mode = ManagerSession.InputMode.SEARCH;
+        }
+        session.inputMode(ManagerSession.InputMode.NONE);
+        if (message.equalsIgnoreCase("/cancel")) {
+            player.sendMessage(lang.msg("manager.inputCancelled"));
+            renderList(player, session);
+            return;
+        }
+        if (mode == ManagerSession.InputMode.CREATE) {
             String name = Gui.normalizeName(message);
             if (name.isEmpty() || name.length() > 32) {
                 player.sendMessage(lang.msg("manager.nameInvalid"));
+                renderList(player, session);
                 return;
             }
             if (registry.get(name) != null) {
                 player.sendMessage(lang.msg("manager.exists"));
+                renderList(player, session);
                 return;
             }
             Gui gui = registry.create(name);
@@ -404,7 +430,7 @@ public class ManagerMenu {
         if (meta != null) {
             meta.displayName(SERIALIZER.deserialize(name).decoration(TextDecoration.ITALIC, TextDecoration.State.FALSE));
             if (lore.length > 0) {
-                meta.lore(lore);
+                meta.lore(Arrays.asList(lore));
             }
             stack.setItemMeta(meta);
         }

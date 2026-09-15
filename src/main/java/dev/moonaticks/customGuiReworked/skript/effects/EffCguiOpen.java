@@ -20,28 +20,24 @@ import org.bukkit.event.Event;
  * <p>Вторая форма временно подменяет тип хранилища при открытии.
  */
 @SuppressWarnings("deprecation")
-public class EffCguiOpen implements Effect {
+public class EffCguiOpen extends Effect {
 
-    static {
-        Skript.registerEffect(EffCguiOpen.class,
-                "open [the] cgui %string% (to|for) %player%",
-                "open [the] cgui %string% (to|for) %player% with storage %string%");
-    }
 
-    private Expression<?> name;
-    private Expression<?> player;
-    private Expression<?> storage;
+    private Expression<String> name;
+    private Expression<Player> player;
+    private Expression<String> storage;
 
     @Override
+    @SuppressWarnings("unchecked")
     public boolean init(Expression<?>[] exprs, int matchedPattern, Kleenean isDelayed, ParseResult parser) {
-        this.name = exprs[0];
-        this.player = exprs[1];
-        this.storage = exprs[2];
+        this.name = (Expression<String>) exprs[0];
+        this.player = (Expression<Player>) exprs[1];
+        this.storage = matchedPattern == 1 ? (Expression<String>) exprs[2] : null;
         return true;
     }
 
     @Override
-    public void execute(Event event) {
+    protected void execute(Event event) {
         String s = name.getSingle(event);
         Player p = player.getSingle(event);
         if (s == null || p == null) {

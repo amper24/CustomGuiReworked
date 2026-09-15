@@ -27,18 +27,15 @@ import java.util.List;
 @SuppressWarnings("deprecation")
 public class ExprCguiItems extends SimpleExpression<ItemStack> {
 
-    static {
-        Skript.registerExpression(ExprCguiItems.class, ItemStack.class, ExpressionType.COMBINED,
-                "[all] [the] cgui items (of|from) %string% (for|of) %player%");
-    }
 
-    private Expression<?> name;
-    private Expression<?> player;
+    private Expression<String> name;
+    private Expression<Player> player;
 
     @Override
+    @SuppressWarnings("unchecked")
     public boolean init(Expression<?>[] exprs, int matchedPattern, Kleenean isDelayed, ParseResult parser) {
-        this.name = exprs[0];
-        this.player = exprs[1];
+        this.name = (Expression<String>) exprs[0];
+        this.player = (Expression<Player>) exprs[1];
         return true;
     }
 

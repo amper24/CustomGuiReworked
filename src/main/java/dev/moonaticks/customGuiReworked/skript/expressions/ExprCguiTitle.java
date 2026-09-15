@@ -17,17 +17,13 @@ import org.bukkit.event.Event;
 @SuppressWarnings("deprecation")
 public class ExprCguiTitle extends SimpleExpression<String> {
 
-    static {
-        Skript.registerExpression(ExprCguiTitle.class, String.class, ExpressionType.COMBINED,
-                "[the] cgui title of %string%",
-                "[the] title of cgui %string%");
-    }
 
-    private Expression<?> name;
+    private Expression<String> name;
 
     @Override
+    @SuppressWarnings("unchecked")
     public boolean init(Expression<?>[] exprs, int matchedPattern, Kleenean isDelayed, ParseResult parser) {
-        this.name = exprs[0];
+        this.name = (Expression<String>) exprs[0];
         return true;
     }
 

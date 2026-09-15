@@ -90,6 +90,18 @@ public class EditorManager {
         player.openInventory(screen(session, screen));
     }
 
+    /** Строит инвентарь указанного экрана редактора. */
+    public Inventory screen(EditorSession session, EditorHolder.Screen screen) {
+        return switch (screen) {
+            case MAIN -> mainScreen(session);
+            case SIZE -> sizeScreen(session);
+            case SKELETON -> skeletonScreen(session);
+            case DESIGN -> designScreen(session);
+            case STORAGE -> storageScreen(session);
+            case BLOCKS -> blocksScreen(session);
+        };
+    }
+
     public void deleteGui(Player player, EditorSession session) {
         Gui gui = session.gui();
         registry.delete(gui.name());
@@ -254,22 +266,57 @@ public class EditorManager {
         }
     }
 
-    /** Переснимает дизайн-слоты из открытого инвентаря и сохраняет. */
+    /** Переснимает дизайн-слоты из открытого инвентаря и сохраняет.
+     * Сообщение «сохранено» показываем только при реальных изменениях. */
     public void captureDesign(Player player, EditorSession session) {
         Inventory inv = currentEditorInventory(player, session, EditorHolder.Screen.DESIGN);
         if (inv == null) {
             return;
         }
         Gui gui = session.gui();
+        boolean changed = false;
         for (int i = 0; i < gui.slots(); i++) {
             if (gui.slotType(i) != SlotType.DESIGN) {
                 continue;
             }
             ItemStack item = inv.getItem(i);
-            gui.setDesignAt(i, (item != null && isPlaceholder(item)) ? "" : Codecs.encode(item));
+            if (item != null && isPlaceholderItem(item)) {
+                continue; // служебная панель «пусто» — не сохраняем
+            }
+            String encoded = Codecs.encode(item);
+            if (!encoded.equals(gui.designAt(i))) {
+                gui.setDesignAt(i, encoded);
+                changed = true;
+            }
         }
-        registry.save(gui);
-        player.sendMessage(lang.msg("editor.saved"));
+        if (changed) {
+            registry.save(gui);
+            player.sendMessage(lang.msg("editor.saved"));
+        }
+        // Возвращаем визуальные панели в опустевшие слоты,
+        // чтобы экран не «дырявился» после забора предметов.
+        for (int i = 0; i < gui.slots(); i++) {
+            if (gui.slotType(i) == SlotType.DESIGN
+                    && (inv.getItem(i) == null || inv.getItem(i).getType() == Material.AIR)) {
+                inv.setItem(i, item(Material.LIME_STAINED_GLASS_PANE, lang.raw("editor.design.empty")));
+            }
+        }
+    }
+
+    /** true, если предмет — служебная панель-заглушка пустого дизайн-слота. */
+    public boolean isPlaceholderItem(ItemStack item) {
+        return isPlaceholder(item);
+    }
+
+    /** Сбрасывает чат-промпт по таймауту (5 минут), если игрок так ничего и не ввёл. */
+    public void schedulePromptTimeout(Player player, EditorSession session) {
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            if (player.isOnline() && session(player.getUniqueId()) == session
+                    && session.prompt() != EditorSession.Prompt.NONE) {
+                session.prompt(EditorSession.Prompt.NONE);
+                player.sendMessage(lang.msg("editor.promptTimeout"));
+            }
+        }, 20L * 60 * 5);
     }
 
     /** Очищает один дизайн-слот (right-click по пустой руке). */

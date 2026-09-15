@@ -11,6 +11,12 @@ import dev.moonaticks.customGuiReworked.codec.LegacyPayloads;
 import org.bukkit.configuration.file.YamlConfiguration;
 
 import java.io.File;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -18,6 +24,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -43,9 +50,15 @@ public class GuiRegistry {
     private final Map<String, Gui> blockIndex = new ConcurrentHashMap<>();
 
     public GuiRegistry(CustomGuiReworked plugin) {
+        this(plugin, plugin.getDataFolder());
+    }
+
+    /** Тестовый конструктор с произвольной папкой данных (plugin может быть null,
+     *  если тестируемые пути не пишут в лог). */
+    GuiRegistry(CustomGuiReworked plugin, File dataFolder) {
         this.plugin = plugin;
-        this.tableDir = new File(plugin.getDataFolder(), "tables");
-        this.customDir = new File(plugin.getDataFolder(), "custom");
+        this.tableDir = new File(dataFolder, "tables");
+        this.customDir = new File(dataFolder, "custom");
     }
 
     public File tableDirectory() {
@@ -66,6 +79,9 @@ public class GuiRegistry {
         guis.clear();
         blockIndex.clear();
         int loaded = 0;
+        // tables/ загружаются первыми, custom/ (зарегистрированные
+        // другими плагинами) имеют приоритет при совпадении имён —
+        // конфликт всегда логируется, а не молча проглатывается.
         for (File dir : new File[]{tableDir, customDir}) {
             File[] files = dir.listFiles((d, name) -> name.toLowerCase(Locale.ROOT).endsWith(".yml"));
             if (files == null) {
@@ -74,11 +90,18 @@ public class GuiRegistry {
             for (File file : files) {
                 try {
                     Gui gui = loadFromFile(file);
-                    if (gui != null) {
-                        guis.put(gui.name(), gui);
-                        reindexBlocks(gui);
-                        loaded++;
+                    if (gui == null) {
+                        continue;
                     }
+                    Gui previous = guis.put(gui.name(), gui);
+                    if (previous != null) {
+                        blockIndex.values().removeIf(g -> g == previous);
+                        plugin.getLogger().warning("Duplicate GUI name '" + gui.name()
+                                + "' in " + file.getName() + " (overrides "
+                                + (previous.source() == Gui.Source.CUSTOM ? "custom" : "tables") + " copy)");
+                    }
+                    reindexBlocks(gui);
+                    loaded++;
                 } catch (Exception e) {
                     plugin.getLogger().severe("Failed to load GUI " + file.getName() + ": " + e.getMessage());
                 }
@@ -138,17 +161,62 @@ public class GuiRegistry {
         if (gui == null) {
             return null;
         }
-        Gui old = guis.get(gui.name());
-        if (old != null) {
-            deleteFileOf(old);
+        // Экземпляр мог быть зарегистрирован раньше под другим именем
+        // (Gui.rename + повторный register) — снимаем старую привязку,
+        // иначе в карте остались бы два ключа на один GUI и осиротевший файл.
+        String oldName = detachIdentity(gui);
+        Gui.Source previousSource = gui.source();
+        Gui sameName = guis.get(gui.name());
+        if (sameName != null && sameName != gui) {
+            blockIndex.values().removeIf(g -> g == sameName);
+            guis.remove(sameName.name());
+            deleteFileOf(sameName);
         }
         gui.source(persist ? Gui.Source.CUSTOM : Gui.Source.RUNTIME);
+        // Убираем файл под прежним именем/статусом:
+        //  - переименование persist-GUI — старый <oldName>.yml;
+        //  - понижение CUSTOM → RUNTIME — текущий файл.
+        if (previousSource == Gui.Source.CUSTOM) {
+            String stale = null;
+            if (oldName != null && !oldName.equals(gui.name())) {
+                stale = oldName;
+            } else if (oldName != null && !persist) {
+                stale = gui.name();
+            }
+            if (stale != null) {
+                File staleFile = new File(directoryFor(gui), stale + ".yml");
+                if (staleFile.exists() && !staleFile.delete()) {
+                    plugin.getLogger().warning("Could not delete stale GUI file " + staleFile);
+                }
+            }
+        }
         guis.put(gui.name(), gui);
         reindexBlocks(gui);
         if (persist) {
             writeToFile(gui);
         }
         return gui;
+    }
+
+    /**
+     * Снимает все ранее существовавшие привязки того же самого экземпляра
+     * (ключ в карте имён и block-индекс), вызванные переименованием.
+     *
+     * @return прежнее имя экземпляра в карте или null
+     */
+    private String detachIdentity(Gui gui) {
+        String oldName = null;
+        for (Map.Entry<String, Gui> entry : guis.entrySet()) {
+            if (entry.getValue() == gui) {
+                oldName = entry.getKey();
+                if (!oldName.equals(gui.name())) {
+                    guis.remove(oldName);
+                }
+                break;
+            }
+        }
+        blockIndex.values().removeIf(g -> g == gui);
+        return oldName;
     }
 
     /**
@@ -188,14 +256,21 @@ public class GuiRegistry {
     }
 
     /** Сохраняет GUI в файл (по папке происхождения) и обновляет индексы. */
-    public void save(Gui gui) {
+    public synchronized void save(Gui gui) {
         if (gui == null) {
             return;
         }
+        String oldName = detachIdentity(gui);
         if (gui.source() == Gui.Source.RUNTIME) {
             guis.put(gui.name(), gui);
             reindexBlocks(gui);
             return;
+        }
+        if (oldName != null && !oldName.equals(gui.name())) {
+            File oldFile = new File(directoryFor(gui), oldName + ".yml");
+            if (oldFile.exists() && !oldFile.delete()) {
+                plugin.getLogger().warning("Could not delete stale GUI file " + oldFile);
+            }
         }
         writeToFile(gui);
         guis.put(gui.name(), gui);
@@ -208,6 +283,7 @@ public class GuiRegistry {
             plugin.getLogger().warning("Could not create folder " + dir);
             return;
         }
+        File target = new File(dir, gui.fileName());
         YamlConfiguration config = new YamlConfiguration();
         config.set("name", gui.name());
         config.set("title", gui.title());
@@ -231,9 +307,35 @@ public class GuiRegistry {
         config.set("commands", commands);
         config.set("blockIds", new ArrayList<>(gui.blockIds()));
         try {
-            config.save(new File(dir, gui.fileName()));
+            atomicSave(config, target);
         } catch (Exception e) {
             plugin.getLogger().severe("Failed to save GUI " + gui.name() + ": " + e.getMessage());
+        }
+    }
+
+    /**
+     * Атомарное сохранение YAML: пишем в уникальный tmp и делаем ATOMIC_MOVE,
+     * чтобы падение сервера не оставило полу-записанный файл GUI.
+     */
+    private void atomicSave(YamlConfiguration config, File target) throws IOException {
+        File parent = target.getParentFile();
+        if (parent != null && !parent.exists() && !parent.mkdirs()) {
+            throw new IOException("Could not create folder " + parent);
+        }
+        String data = config.saveToString();
+        Path tmp = target.toPath().resolveSibling(target.getName() + ".tmp-" + UUID.randomUUID());
+        Files.writeString(tmp, data, StandardCharsets.UTF_8);
+        try {
+            Files.move(tmp, target.toPath(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+        } catch (AtomicMoveNotSupportedException e) {
+            Files.move(tmp, target.toPath(), StandardCopyOption.REPLACE_EXISTING);
+        } catch (IOException e) {
+            try {
+                Files.deleteIfExists(tmp);
+            } catch (IOException ignored) {
+                // best-effort cleanup
+            }
+            throw e;
         }
     }
 
@@ -262,6 +364,9 @@ public class GuiRegistry {
             if (loaded == null) {
                 return null;
             }
+            // Снимаем привязки СТАРОГО экземпляра (он другой объект —
+            // обычный reindexBlocks их бы не убрал и оставил «призраки»).
+            blockIndex.values().removeIf(g -> g == gui);
             guis.put(loaded.name(), loaded);
             reindexBlocks(loaded);
             return loaded;
@@ -274,7 +379,14 @@ public class GuiRegistry {
     private void reindexBlocks(Gui gui) {
         blockIndex.values().removeIf(g -> g == gui);
         for (String id : gui.blockIds()) {
-            blockIndex.put(id.toLowerCase(Locale.ROOT), gui);
+            String key = id.toLowerCase(Locale.ROOT);
+            Gui existing = blockIndex.get(key);
+            if (existing != null && existing != gui) {
+                plugin.getLogger().warning("Block id '" + id + "' is bound to both '"
+                        + existing.name() + "' and '" + gui.name() + "' — '"
+                        + gui.name() + "' wins; unbind it from one of the GUIs to avoid ambiguity");
+            }
+            blockIndex.put(key, gui);
         }
     }
 

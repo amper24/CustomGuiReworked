@@ -14,19 +14,15 @@ import org.bukkit.event.Event;
  * {@code %string% is [a] cgui}
  */
 @SuppressWarnings("deprecation")
-public class CondCguiExists implements Condition {
+public class CondCguiExists extends Condition {
 
-    static {
-        Skript.registerCondition(CondCguiExists.class,
-                "cgui %string% exists",
-                "%string% is [a] cgui");
-    }
 
-    private Expression<?> name;
+    private Expression<String> name;
 
     @Override
+    @SuppressWarnings("unchecked")
     public boolean init(Expression<?>[] exprs, int matchedPattern, Kleenean isDelayed, ParseResult parser) {
-        this.name = exprs[0];
+        this.name = (Expression<String>) exprs[0];
         return true;
     }
 

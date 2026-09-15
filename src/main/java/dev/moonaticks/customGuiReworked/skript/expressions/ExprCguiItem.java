@@ -24,20 +24,17 @@ import org.bukkit.inventory.ItemStack;
 @SuppressWarnings("deprecation")
 public class ExprCguiItem extends SimpleExpression<ItemStack> {
 
-    static {
-        Skript.registerExpression(ExprCguiItem.class, ItemStack.class, ExpressionType.COMBINED,
-                "[the] cgui item (in|at) slot %number% (of|from) %string% (for|of) %player%");
-    }
 
-    private Expression<?> slot;
-    private Expression<?> name;
-    private Expression<?> player;
+    private Expression<Number> slot;
+    private Expression<String> name;
+    private Expression<Player> player;
 
     @Override
+    @SuppressWarnings("unchecked")
     public boolean init(Expression<?>[] exprs, int matchedPattern, Kleenean isDelayed, ParseResult parser) {
-        this.slot = exprs[0];
-        this.name = exprs[1];
-        this.player = exprs[2];
+        this.slot = (Expression<Number>) exprs[0];
+        this.name = (Expression<String>) exprs[1];
+        this.player = (Expression<Player>) exprs[2];
         return true;
     }
 
@@ -58,12 +55,13 @@ public class ExprCguiItem extends SimpleExpression<ItemStack> {
 
     @Override
     protected ItemStack[] get(Event event) {
-        Integer n = slot.getSingle(event);
+        Number n = slot.getSingle(event);
         String s = name.getSingle(event);
         Player p = player.getSingle(event);
         if (n == null || s == null || p == null) {
             return null;
         }
+        int slotIndex = n.intValue();
         CustomGuiReworked plugin = SkriptSupport.plugin();
         if (plugin == null) {
             return null;
@@ -73,10 +71,10 @@ public class ExprCguiItem extends SimpleExpression<ItemStack> {
             return null;
         }
         String[] data = CguiStorageAccess.read(plugin, gui, p);
-        if (n < 0 || n >= data.length) {
+        if (slotIndex < 0 || slotIndex >= data.length) {
             return null;
         }
-        ItemStack item = Codecs.decode(data[n]);
+        ItemStack item = Codecs.decode(data[slotIndex]);
         return item == null || item.getType() == Material.AIR ? null : new ItemStack[]{item};
     }
 }

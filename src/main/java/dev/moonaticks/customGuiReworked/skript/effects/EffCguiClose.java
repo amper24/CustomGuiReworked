@@ -18,23 +18,20 @@ import org.bukkit.event.Event;
  * инвентарь — наш GUI; данные сохраняются как обычно).
  */
 @SuppressWarnings("deprecation")
-public class EffCguiClose implements Effect {
+public class EffCguiClose extends Effect {
 
-    static {
-        Skript.registerEffect(EffCguiClose.class,
-                "[close|cancel] [the] cgui (of|for) %player%");
-    }
 
-    private Expression<?> player;
+    private Expression<Player> player;
 
     @Override
+    @SuppressWarnings("unchecked")
     public boolean init(Expression<?>[] exprs, int matchedPattern, Kleenean isDelayed, ParseResult parser) {
-        this.player = exprs[0];
+        this.player = (Expression<Player>) exprs[0];
         return true;
     }
 
     @Override
-    public void execute(Event event) {
+    protected void execute(Event event) {
         Player p = player.getSingle(event);
         if (p == null) {
             return;

@@ -38,7 +38,7 @@ public final class LegacyPayloads {
         if (raw == null || raw.isBlank() || raw.equals("{}")) {
             return "";
         }
-        if (raw.startsWith("n1:") || raw.startsWith("b1:")) {
+        if (raw.startsWith("n1:") || raw.startsWith("b1:") || raw.startsWith("b2:")) {
             return raw;
         }
         ItemStack item = decodeLegacy(raw);
@@ -75,7 +75,10 @@ public final class LegacyPayloads {
      * (lookahead защищает строковые значения от повреждения).
      */
     static String sanitize(String json) {
-        String value = ",}]\\s"; // позиции, где может стоять JSON-значение
+        // Lookahead: символ, на котором может заканчиваться JSON-значение
+        // (запятая, закрывающая скобка, конец ввода, пробел/перевод строки).
+        // Обязательно символьный класс [..], а не последовательность литералов.
+        String value = "[,\\}\\]\\s]|$";
         return json
                 .replaceAll("\"(-?\\d+)b\"", "$1")
                 .replaceAll("\"(-?\\d+)s\"", "$1")

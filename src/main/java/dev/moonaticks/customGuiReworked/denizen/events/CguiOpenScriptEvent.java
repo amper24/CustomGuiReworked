@@ -1,6 +1,7 @@
 package dev.moonaticks.customGuiReworked.denizen.events;
 
 import com.denizenscript.denizen.events.BukkitScriptEvent;
+import com.denizenscript.denizen.objects.NPCTag;
 import com.denizenscript.denizen.objects.PlayerTag;
 import com.denizenscript.denizen.utilities.implementation.BukkitScriptEntryData;
 import com.denizenscript.denizencore.objects.ObjectTag;
@@ -47,7 +48,7 @@ public class CguiOpenScriptEvent extends BukkitScriptEvent implements Listener {
 
     @Override
     public ScriptEntryData getScriptEntryData() {
-        return new BukkitScriptEntryData(player);
+        return new BukkitScriptEntryData(player, null);
     }
 
     @Override

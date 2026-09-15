@@ -66,6 +66,9 @@ public class Gui {
     public Gui(String name) {
         this.name = normalizeName(name);
         resetSkeleton();
+        // Дизайн обязан иметь размер slots() — иначе setDesignAt/
+        // setDesignItem на свежесозданном GUI бросали IndexOutOfBounds.
+        resetDesign();
     }
 
     /** Нормализация имени: нижний регистр, только [a-zA-Z0-9_-], без «.yml». */

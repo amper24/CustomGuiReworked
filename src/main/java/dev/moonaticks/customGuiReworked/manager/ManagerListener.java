@@ -6,7 +6,6 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.inventory.InventoryClickEvent;
-import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.player.AsyncPlayerChatEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.Inventory;
@@ -32,7 +31,7 @@ public class ManagerListener implements Listener {
         event.setCancelled(true);
         Player player = (Player) event.getWhoClicked();
         Inventory top = event.getInventory();
-        int slot = top.getRawSlot();
+        int slot = event.getRawSlot();
 
         if (holder.screen() == ManagerHolder.Screen.LIST) {
             String guiName = holder.guiAt(slot);
@@ -41,7 +40,7 @@ public class ManagerListener implements Listener {
                 return;
             }
             switch (slot) {
-                case 6 -> manager.onStatusClick(player);
+                case 6 -> manager.onSearchClick(player);
                 case 7 -> manager.onCreateClick(player);
                 case 8 -> manager.onReloadClick(player);
                 case 39 -> manager.onStatusClick(player);
@@ -62,33 +61,22 @@ public class ManagerListener implements Listener {
     }
 
     /**
-     * Пока меню открыто, чат = поиск (или ввод имени нового GUI).
+     * Пока активен режим ввода (меню закрыто и ждёт текст) или открыто
+     * само меню, чат = поиск/имя нового GUI.
      * Событие асинхронное — саму логику выполняем на основном потоке.
      */
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onChat(AsyncPlayerChatEvent event) {
         Player player = event.getPlayer();
-        if (!manager.isOpen(player)) {
+        ManagerSession session = manager.session(player.getUniqueId());
+        boolean awaitingInput = session != null
+                && session.inputMode() != ManagerSession.InputMode.NONE;
+        if (!awaitingInput && !manager.isOpen(player)) {
             return;
         }
         event.setCancelled(true);
         String message = event.getMessage();
         plugin.getServer().getScheduler().runTask(plugin, () -> manager.onChat(player, message));
-    }
-
-    /** Закрытие списка сбрасывает незавершённый ввод имени нового GUI. */
-    @EventHandler
-    public void onClose(InventoryCloseEvent event) {
-        if (!(event.getInventory().getHolder() instanceof ManagerHolder holder)) {
-            return;
-        }
-        if (holder.screen() != ManagerHolder.Screen.LIST) {
-            return;
-        }
-        ManagerSession session = manager.session(event.getPlayer().getUniqueId());
-        if (session != null && session.isCreating()) {
-            session.creating(false);
-        }
     }
 
     @EventHandler

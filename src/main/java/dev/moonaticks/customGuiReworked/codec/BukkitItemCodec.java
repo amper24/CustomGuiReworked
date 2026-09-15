@@ -1,46 +1,39 @@
 package dev.moonaticks.customGuiReworked.codec;
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
-import com.google.gson.JsonArray;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
-import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.inventory.ItemStack;
 
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.Base64;
 
 /**
- * Запасной кодек без NBTAPI на базе
- * {@link org.bukkit.inventory.ItemFactory#serializeItem} /
- * {@link org.bukkit.inventory.ItemFactory#deserializeItem}.
+ * Запасной кодек без NBTAPI на базе нативного бинарного формата Paper:
+ * {@link ItemStack#serializeAsBytes()} / {@link ItemStack#deserializeBytes(byte[])}.
  *
- * <p>Сохраняет стандартные данные предмета (тип, количество, lore,
- * зачарования, custom model data, damage, PDC и legacy-NBT, который
- * Paper сериализует в формате serializeItem).
+ * <p>Бинарные данные передаются как Base64 (payload хранится текстом).
+ * Формат сохраняет всю информацию о предмете, которую умеет сериализовать
+ * сам Paper (компоненты, PDC, зачарования и т.д.).
+ *
+ * <p>Тег {@code b2}; старый формат {@code b1} (JSON-карта, существовавший
+ * в ранних сборках 2.1.x) читается отдельным {@link LegacyBukkitMapItemCodec}.
  */
 public final class BukkitItemCodec implements ItemCodec {
 
-    private static final Gson GSON = new GsonBuilder().disableHtmlEscaping().create();
+    private static final Base64.Encoder ENCODER = Base64.getEncoder();
+    private static final Base64.Decoder DECODER = Base64.getDecoder();
 
     @Override
     public String tag() {
-        return "b1";
+        return "b2";
     }
 
     @Override
     public String encode(ItemStack item) {
         try {
-            Map<String, Object> map = Bukkit.getItemFactory().serializeItem(item);
-            if (map == null || map.isEmpty()) {
+            byte[] bytes = item.serializeAsBytes();
+            if (bytes == null || bytes.length == 0) {
                 return "";
             }
-            return GSON.toJson(map);
+            return ENCODER.encodeToString(bytes);
         } catch (Exception e) {
             return "";
         }
@@ -49,54 +42,14 @@ public final class BukkitItemCodec implements ItemCodec {
     @Override
     public ItemStack decode(String payload) {
         try {
-            JsonObject obj = JsonParser.parseString(payload).getAsJsonObject();
-            Map<String, Object> map = new LinkedHashMap<>();
-            for (Map.Entry<String, JsonElement> entry : obj.entrySet()) {
-                map.put(entry.getKey(), fromJson(entry.getValue()));
+            if (payload == null || payload.isBlank()) {
+                return new ItemStack(Material.AIR);
             }
-            ItemStack item = Bukkit.getItemFactory().deserializeItem(map);
+            byte[] bytes = DECODER.decode(payload.trim());
+            ItemStack item = ItemStack.deserializeBytes(bytes);
             return item == null ? new ItemStack(Material.AIR) : item;
         } catch (Exception e) {
             return new ItemStack(Material.AIR);
         }
-    }
-
-    private static Object fromJson(JsonElement element) {
-        if (element == null || element.isJsonNull()) {
-            return null;
-        }
-        if (element.isJsonObject()) {
-            JsonObject obj = element.getAsJsonObject();
-            Map<String, Object> map = new LinkedHashMap<>();
-            for (Map.Entry<String, JsonElement> entry : obj.entrySet()) {
-                map.put(entry.getKey(), fromJson(entry.getValue()));
-            }
-            return map;
-        }
-        if (element.isJsonArray()) {
-            JsonArray array = element.getAsJsonArray();
-            List<Object> list = new ArrayList<>(array.size());
-            for (JsonElement item : array) {
-                list.add(fromJson(item));
-            }
-            return list;
-        }
-        if (element.isJsonPrimitive()) {
-            if (element.getAsJsonPrimitive().isNumber()) {
-                Number number = element.getAsNumber();
-                if (number instanceof Double d) {
-                    return (d == Math.rint(d) && Math.abs(d) < 1e15) ? d.longValue() : d;
-                }
-                if (number instanceof Float f) {
-                    return f.intValue();
-                }
-                return number;
-            }
-            if (element.getAsJsonPrimitive().isBoolean()) {
-                return element.getAsBoolean();
-            }
-            return element.getAsString();
-        }
-        return null;
     }
 }

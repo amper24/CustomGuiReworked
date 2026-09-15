@@ -15,20 +15,17 @@ import org.bukkit.event.Event;
  * {@code [the] cgui (of|for) %player% is %string%}
  */
 @SuppressWarnings("deprecation")
-public class CondCguiIs implements Condition {
+public class CondCguiIs extends Condition {
 
-    static {
-        Skript.registerCondition(CondCguiIs.class,
-                "[the] cgui (of|for) %player% is %string%");
-    }
 
-    private Expression<?> player;
-    private Expression<?> name;
+    private Expression<Player> player;
+    private Expression<String> name;
 
     @Override
+    @SuppressWarnings("unchecked")
     public boolean init(Expression<?>[] exprs, int matchedPattern, Kleenean isDelayed, ParseResult parser) {
-        this.player = exprs[0];
-        this.name = exprs[1];
+        this.player = (Expression<Player>) exprs[0];
+        this.name = (Expression<String>) exprs[1];
         return true;
     }
 

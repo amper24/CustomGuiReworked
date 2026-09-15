@@ -4,9 +4,8 @@ import dev.moonaticks.customGuiReworked.CustomGuiReworked;
 import dev.moonaticks.customGuiReworked.api.Gui;
 import dev.moonaticks.customGuiReworked.api.SlotCommand;
 import dev.moonaticks.customGuiReworked.api.SlotType;
-import dev.moonaticks.customGuiReworked.api.StorageType;
+import dev.moonaticks.customGuiReworked.api.event.GuiDragEvent;
 import dev.moonaticks.customGuiReworked.api.event.GuiSlotClickEvent;
-import dev.moonaticks.customGuiReworked.codec.Codecs;
 import dev.moonaticks.customGuiReworked.gui.GuiHolder;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
@@ -18,6 +17,7 @@ import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.inventory.Inventory;
+import org.bukkit.inventory.ItemStack;
 import org.bukkit.scheduler.BukkitRunnable;
 
 import java.util.ArrayList;
@@ -26,18 +26,21 @@ import java.util.List;
 /**
  * Взаимодействие игроков с открытыми GUI.
  *
- * <p>Оптимизация по сравнению со старой версией:
+ * <p>Гарантии:
  * <ul>
- *   <li>защита дизайн-слотов и result-слотов от прямого изменения;</li>
- *   <li>после клика сериализуется <b>только затронутый слот</b>
- *       (а не весь инвентарь, как раньше — один NBT-вызов вместо 54);</li>
- *   <li>полный снапшот — только при сдвиге из нижнего инвентаря;</li>
- *   <li>сохранение — через {@link dev.moonaticks.customGuiReworked.storage.StorageService}
- *       (асинхронно, с коалесингом), а не на каждый клик;</li>
+ *   <li>дизайн-слоты неизменяемы, но клики по ним (кнопки) запускают
+ *       привязанные команды и генерируют {@link GuiSlotClickEvent};</li>
+ *   <li>result-слоты — только «на выход»: любые попытки положить туда
+ *       предмет (курсор, цифровые клавиши, свап с офхендом, драг,
+ *       сдвиг из нижнего инвентаря) заблокированы;</li>
+ *   <li>изменения читаются со снапшота <b>следующего тика</b> (внутри
+ *       InventoryClickEvent инвентарь ещё содержит старые предметы),
+ *       дифом по baseline — в хранилище пишутся только изменившиеся
+ *       слоты, не затирая параллельные сессии других игроков;</li>
  *   <li>команды выполняются через {@link Bukkit#dispatchCommand} без
- *       setOp-эксплойта и «чёрного списка» игроков;</li>
- *   <li>каждый клик по слоту генерирует {@link GuiSlotClickEvent} —
- *       точка расширения для API.</li>
+ *       setOp-эксплойта;</li>
+ *   <li>каждый клик по верхнему инвентарю и каждый драг генерируют
+ *       события API — точки расширения для других плагинов.</li>
  * </ul>
  */
 public class GuiInteractionListener implements Listener {
@@ -61,46 +64,101 @@ public class GuiInteractionListener implements Listener {
         Inventory clicked = event.getClickedInventory();
         boolean inTop = clicked != null && clicked == top;
         int slot = event.getSlot();
+        ClickType click = event.getClick();
 
         if (!inTop) {
-            // Сдвиг из нижнего инвентаря может положить предметы в верхний.
-            // Если в GUI есть result-слоты, запрещаем сдвиг целиком,
-            // чтобы предметы не попали в незащищённые места.
+            // Клик по своему инвентарю. Верхний инвентарь меняют только
+            // shift-перенос и double-click (сбор стака на курсор).
             if (event.isShiftClick()) {
+                // Предмет может распределиться в result-слот — запрещаем,
+                // если result-слоты вообще есть в GUI.
                 if (gui.skeleton().contains(SlotType.RESULT)) {
                     event.setCancelled(true);
                     return;
                 }
-                afterFullChange(holder);
+                holder.addAllCandidates();
+                plugin.opener().scheduleReconcile(holder);
+            } else if (click == ClickType.DOUBLE_CLICK) {
+                // Double-click собирает совпадающие стаки из ВСЕГО верхнего
+                // инвентаря, включая дизайн-предметы (кража оформления) —
+                // запрещаем при любых дизайн-слотах, иначе реконсилируем всё.
+                if (gui.skeleton().contains(SlotType.DESIGN)) {
+                    event.setCancelled(true);
+                    return;
+                }
+                holder.addAllCandidates();
+                plugin.opener().scheduleReconcile(holder);
             }
             return;
         }
 
-        SlotType type = gui.slotType(slot);
-        ClickType click = event.getClick();
-
-        // Дизайн-слоты неизменяемы
-        if (type == SlotType.DESIGN) {
+        // Double-click по верхнему инвентарю тоже может собрать дизайн —
+        // блокируем его при наличии дизайн-слотов.
+        if (click == ClickType.DOUBLE_CLICK && gui.skeleton().contains(SlotType.DESIGN)) {
             event.setCancelled(true);
             return;
         }
-        // Result: нельзя ставить предметы (кроме сдвига и double-click сбора)
-        if (type == SlotType.RESULT
-                && event.getCursor() != null
-                && event.getCursor().getType() != Material.AIR
-                && !event.isShiftClick()
-                && click != ClickType.DOUBLE_CLICK) {
+
+        SlotType type = gui.slotType(slot);
+
+        // Дизайн-слоты неизменяемы, но клик по кнопке работает.
+        if (type == SlotType.DESIGN) {
             event.setCancelled(true);
+            boolean runCommands = fireClickEvent(player, gui, top, slot, type, click, event, true);
+            if (runCommands) {
+                runCommands(player, gui, slot);
+            }
+            return;
         }
 
-        // Событие API: отмена запрещает выполнение привязанных команд
-        GuiSlotClickEvent guiEvent = new GuiSlotClickEvent(player, gui, top, slot, type, true, click);
-        Bukkit.getPluginManager().callEvent(guiEvent);
-        if (!guiEvent.isCancelled()) {
+        // Result: кладка предмета запрещена всеми способами.
+        boolean placementBlocked = false;
+        if (type == SlotType.RESULT) {
+            placementBlocked = isPlacementIntoResult(player, event);
+            if (placementBlocked) {
+                event.setCancelled(true);
+            }
+        }
+
+        boolean runCommands = fireClickEvent(player, gui, top, slot, type, click, event, !placementBlocked);
+
+        // Кандидаты на запись: одиночный клик затрагивает один слот,
+        // shift/double могут перераспределить предметы по всему GUI.
+        if (event.isShiftClick() || click == ClickType.DOUBLE_CLICK) {
+            holder.addAllCandidates();
+        } else {
+            holder.addCandidate(slot);
+        }
+        plugin.opener().scheduleReconcile(holder);
+
+        // Команды result-слота при заблокированной кладке не запускаем
+        // (это «ошибочный» клик, а не настоящее нажатие кнопки).
+        if (runCommands && !placementBlocked) {
             runCommands(player, gui, slot);
         }
+    }
 
-        afterSlotsChange(holder, List.of(slot));
+    /** true, если клик пытается положить предмет в result-слот. */
+    private boolean isPlacementIntoResult(Player player, InventoryClickEvent event) {
+        ClickType click = event.getClick();
+        if (event.isShiftClick() || click == ClickType.DOUBLE_CLICK) {
+            return false; // take-only операции
+        }
+        if (click == ClickType.NUMBER_KEY) {
+            int hotbar = event.getHotbarButton();
+            if (hotbar >= 0 && hotbar < 9) {
+                ItemStack hot = player.getInventory().getItem(hotbar);
+                return hot != null && hot.getType() != Material.AIR;
+            }
+            return false;
+        }
+        if (click == ClickType.SWAP_OFFHAND) {
+            ItemStack offhand = player.getInventory().getItemInOffHand();
+            return offhand != null && offhand.getType() != Material.AIR;
+        }
+        // LEFT/RIGHT/MIDDLE: прямое размещение с курсора
+        ItemStack cursor = event.getCursor();
+        return cursor != null && cursor.getType() != Material.AIR;
     }
 
     @EventHandler
@@ -113,13 +171,12 @@ public class GuiInteractionListener implements Listener {
             return;
         }
         Gui gui = holder.gui();
-        boolean changed = false;
         List<Integer> affected = new ArrayList<>();
-        for (int slot : event.getRawSlots()) {
-            if (slot < 0 || slot >= top.getSize()) {
+        for (int rawSlot : event.getRawSlots()) {
+            if (rawSlot < 0 || rawSlot >= top.getSize()) {
                 continue;
             }
-            SlotType type = gui.slotType(slot);
+            SlotType type = gui.slotType(rawSlot);
             if (type == SlotType.DESIGN) {
                 event.setCancelled(true);
                 return;
@@ -130,12 +187,21 @@ public class GuiInteractionListener implements Listener {
                 event.setCancelled(true);
                 return;
             }
-            changed = true;
-            affected.add(slot);
+            affected.add(rawSlot);
         }
-        if (changed) {
-            afterSlotsChange(holder, affected);
+        if (affected.isEmpty()) {
+            return;
         }
+        GuiDragEvent dragEvent = new GuiDragEvent(player, gui, top, affected, event);
+        Bukkit.getPluginManager().callEvent(dragEvent);
+        if (dragEvent.isCancelled()) {
+            event.setCancelled(true);
+            return;
+        }
+        for (int slot : affected) {
+            holder.addCandidate(slot);
+        }
+        plugin.opener().scheduleReconcile(holder);
     }
 
     @EventHandler
@@ -151,44 +217,23 @@ public class GuiInteractionListener implements Listener {
         plugin.dispatcher().onInventoryClosed(player, holder.key());
     }
 
-    // ================= хранение =================
+    // ================= событие API =================
 
-    /** Сериализует затронутые (не-дизайн) слоты в хранилище. */
-    private void afterSlotsChange(GuiHolder holder, List<Integer> slots) {
-        Gui gui = holder.gui();
-        if (gui.storage() == StorageType.TEMPORARY) {
-            return;
+    /**
+     * Вызывает {@link GuiSlotClickEvent}.
+     *
+     * @param commandsEnabled разрешены ли привязанные команды при незапамятном
+     *                        состоянии события (false — заблокированная кладка)
+     * @return true, если команды нужно выполнить
+     */
+    private boolean fireClickEvent(Player player, Gui gui, Inventory top, int slot, SlotType type,
+                                   ClickType click, InventoryClickEvent handle, boolean commandsEnabled) {
+        GuiSlotClickEvent guiEvent = new GuiSlotClickEvent(player, gui, top, slot, type, true, click, handle);
+        Bukkit.getPluginManager().callEvent(guiEvent);
+        if (guiEvent.isInteractionCancelled()) {
+            handle.setCancelled(true);
         }
-        Inventory inv = holder.getInventory();
-        if (inv == null) {
-            return;
-        }
-        for (int slot : slots) {
-            if (slot < 0 || slot >= gui.slots()) {
-                continue;
-            }
-            if (gui.slotType(slot) == SlotType.DESIGN) {
-                continue;
-            }
-            plugin.storage().updateSlot(holder.key(), slot, Codecs.encode(inv.getItem(slot)));
-        }
-    }
-
-    /** Полный снапшот (сдвиг из нижнего инвентаря). */
-    private void afterFullChange(GuiHolder holder) {
-        Gui gui = holder.gui();
-        if (gui.storage() == StorageType.TEMPORARY) {
-            return;
-        }
-        Inventory inv = holder.getInventory();
-        if (inv == null) {
-            return;
-        }
-        String[] snapshot = new String[gui.slots()];
-        for (int i = 0; i < gui.slots(); i++) {
-            snapshot[i] = gui.slotType(i) == SlotType.DESIGN ? "" : Codecs.encode(inv.getItem(i));
-        }
-        plugin.storage().update(holder.key(), snapshot);
+        return commandsEnabled && !guiEvent.isCancelled();
     }
 
     // ================= команды =================
@@ -205,13 +250,14 @@ public class GuiInteractionListener implements Listener {
             if (resolved.isBlank()) {
                 continue;
             }
+            final String commandLine = resolved;
             if (command.delay() <= 0) {
-                dispatch(player, resolved, asOp);
+                dispatch(player, commandLine, asOp);
             } else {
                 new BukkitRunnable() {
                     @Override
                     public void run() {
-                        dispatch(player, resolved, asOp);
+                        dispatch(player, commandLine, asOp);
                     }
                 }.runTaskLater(plugin, command.delay());
             }

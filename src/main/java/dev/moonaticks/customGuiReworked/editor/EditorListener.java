@@ -118,6 +118,13 @@ public class EditorListener implements Listener {
         if (session != null) {
             session.prompt(EditorSession.Prompt.NONE);
         }
+        // При выключении плагина отложенный (1 тик) захват дизайна уже не
+        // выполнится — снимаем дизайн синхронно, пока инвентарь открыт.
+        if (session != null && top.getHolder() instanceof EditorHolder editorHolder
+                && editorHolder.screen() == EditorHolder.Screen.DESIGN
+                && !plugin.isEnabled()) {
+            editor.captureDesign(player, session);
+        }
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
@@ -158,8 +165,11 @@ public class EditorListener implements Listener {
             case 11 -> editor.openScreen(player, session, EditorHolder.Screen.SKELETON);
             case 12 -> editor.openScreen(player, session, EditorHolder.Screen.DESIGN);
             case 13 -> {
-                session.prompt(EditorSession.Prompt.TITLE);
+                // Сначала закрываем инвентарь (его close-событие
+                // сбрасывает промпт), и только потом включаем промпт.
                 player.closeInventory();
+                session.prompt(EditorSession.Prompt.TITLE);
+                editor.schedulePromptTimeout(player, session);
                 player.sendMessage(editor.lang().msg("editor.titlePrompt"));
             }
             case 14 -> editor.openScreen(player, session, EditorHolder.Screen.STORAGE);
@@ -198,8 +208,35 @@ public class EditorListener implements Listener {
             player.sendMessage(editor.lang().msg("editor.design.lockedClick"));
             return;
         }
-        event.setCancelled(false); // разрешаем работу с предметом
+        ItemStack current = event.getView().getTopInventory().getItem(slot);
+        // Placeholder «пустого слота» забирать нельзя, но поверх него
+        // можно ПОЛОЖИТЬ предмет (курсор/цифровая клавиша/офхенд) —
+        // именно так пустой дизайн-слот заполняется предметом.
+        if (editor.isPlaceholderItem(current)) {
+            ClickType clickType = event.getClick();
+            boolean wantsPlace;
+            if (clickType == ClickType.NUMBER_KEY) {
+                int btn = event.getHotbarButton();
+                ItemStack hot = btn >= 0 && btn < 9 ? player.getInventory().getItem(btn) : null;
+                wantsPlace = hot != null && hot.getType() != Material.AIR;
+            } else if (clickType == ClickType.SWAP_OFFHAND) {
+                ItemStack offhand = player.getInventory().getItemInOffHand();
+                wantsPlace = offhand != null && offhand.getType() != Material.AIR;
+            } else {
+                ItemStack cursorOnPlaceholder = event.getCursor();
+                wantsPlace = cursorOnPlaceholder != null && cursorOnPlaceholder.getType() != Material.AIR;
+            }
+            if (wantsPlace) {
+                event.setCancelled(false);
+                scheduleCapture(player, session);
+            } else if (clickType == ClickType.RIGHT) {
+                editor.clearDesignSlot(player, session, slot);
+            }
+            return;
+        }
+        event.setCancelled(false); // разрешаем работу с реальным предметом
         ItemStack cursor = event.getCursor();
+        // (cursor объявлен здесь, а не выше: ветка placeholder использует event.getCursor())
         if (cursor == null || cursor.getType() == Material.AIR) {
             if (event.getClick() == ClickType.RIGHT) {
                 // Пустая рука + правый клик — очистить дизайн-слот
@@ -224,8 +261,9 @@ public class EditorListener implements Listener {
 
     private void onBlocks(Player player, EditorSession session, int slot, InventoryClickEvent event) {
         if (slot == 10) {
-            session.prompt(EditorSession.Prompt.BLOCK_ID);
             player.closeInventory();
+            session.prompt(EditorSession.Prompt.BLOCK_ID);
+            editor.schedulePromptTimeout(player, session);
             player.sendMessage(editor.lang().msg("editor.blockPrompt"));
             return;
         }

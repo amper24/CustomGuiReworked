@@ -6,9 +6,12 @@ import dev.moonaticks.customGuiReworked.api.GuiServiceImpl;
 import dev.moonaticks.customGuiReworked.command.GuiCommand;
 import dev.moonaticks.customGuiReworked.command.GuiTabCompleter;
 import dev.moonaticks.customGuiReworked.codec.BukkitItemCodec;
+import dev.moonaticks.customGuiReworked.codec.LegacyBukkitMapItemCodec;
 import dev.moonaticks.customGuiReworked.codec.Codecs;
+import dev.moonaticks.customGuiReworked.editor.EditorHolder;
 import dev.moonaticks.customGuiReworked.editor.EditorListener;
 import dev.moonaticks.customGuiReworked.editor.EditorManager;
+import dev.moonaticks.customGuiReworked.gui.GuiHolder;
 import dev.moonaticks.customGuiReworked.gui.GuiOpener;
 import dev.moonaticks.customGuiReworked.gui.GuiRegistry;
 import dev.moonaticks.customGuiReworked.integration.BlockHookDispatcher;
@@ -18,14 +21,18 @@ import dev.moonaticks.customGuiReworked.denizen.CguiDenizenSupport;
 import dev.moonaticks.customGuiReworked.lang.LanguageManager;
 import dev.moonaticks.customGuiReworked.listeners.GuiInteractionListener;
 import dev.moonaticks.customGuiReworked.listeners.PlayerListener;
+import dev.moonaticks.customGuiReworked.manager.ManagerHolder;
 import dev.moonaticks.customGuiReworked.manager.ManagerListener;
 import dev.moonaticks.customGuiReworked.manager.ManagerMenu;
 import dev.moonaticks.customGuiReworked.skript.SkriptSupport;
 import dev.moonaticks.customGuiReworked.storage.StorageService;
 import org.bukkit.Bukkit;
 import org.bukkit.command.PluginCommand;
+import org.bukkit.entity.Player;
+import org.bukkit.inventory.Inventory;
+import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.plugin.java.JavaPlugin;
-import org.bukkit.service.ServiceRegistration;
+import org.bukkit.plugin.ServicePriority;
 
 import java.io.File;
 
@@ -53,7 +60,7 @@ public final class CustomGuiReworked extends JavaPlugin {
     private ManagerMenu manager;
     private BlockHookDispatcher dispatcher;
     private BlockHookManager hookManager;
-    private ServiceRegistration<GuiService> serviceRegistration;
+    private GuiService registeredService;
 
     @Override
     public void onEnable() {
@@ -63,13 +70,16 @@ public final class CustomGuiReworked extends JavaPlugin {
         languageManager = new LanguageManager(this);
         languageManager.load();
 
-        // Кодек предметов: NBTAPI (эталонный формат экосистемы) или Bukkit-fallback
+        // Кодек предметов: NBTAPI (эталонный формат экосистемы) или Bukkit-fallback.
+        // Вторичные кодеки регистрируются всегда, чтобы читать payload любого формата.
+        Codecs.register(new LegacyBukkitMapItemCodec());
+        Codecs.register(new BukkitItemCodec());
         if (getServer().getPluginManager().getPlugin("NBTAPI") != null) {
             Codecs.initialize(new NbtApiItemCodec());
             getLogger().info("Item codec: NBTAPI (tag n1)");
         } else {
             Codecs.initialize(new BukkitItemCodec());
-            getLogger().warning("NBTAPI not found — using Bukkit fallback item codec (tag b1). "
+            getLogger().warning("NBTAPI not found — using native Paper item codec (tag b2). "
                     + "Install NBTAPI for full NBT fidelity.");
         }
 
@@ -89,6 +99,7 @@ public final class CustomGuiReworked extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new EditorListener(this, editor), this);
         getServer().getPluginManager().registerEvents(new PlayerListener(this), this);
         getServer().getPluginManager().registerEvents(new ManagerListener(this, manager), this);
+        getServer().getPluginManager().registerEvents(storage.blockBackend(), this);
 
         // Скриптовые интеграции (мягкие зависимости: Skript, Denizen)
         new SkriptSupport(this).init();
@@ -102,7 +113,8 @@ public final class CustomGuiReworked extends JavaPlugin {
 
         // Публичный API как библиотека: Bukkit Services + статический фасад
         GuiService service = new GuiServiceImpl(this);
-        serviceRegistration = getServer().getServicesManager().register(GuiService.class, service, this);
+        getServer().getServicesManager().register(GuiService.class, service, this, ServicePriority.Normal);
+        registeredService = service;
         CustomGuiAPI.initialize(service);
 
         hello();
@@ -110,16 +122,38 @@ public final class CustomGuiReworked extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        // Сначала закрываем все наши меню (на основном потоке, пока I/O жив):
+        // закрытие само делает финальную реконсиляцию и saveNow, плюс из GUI
+        // возвращаются/дропаются предметы. Иначе после выключения листенеры
+        // сняты, а меню остаётся открытым — риск дюпа предметов.
+        closeOpenMenus();
         if (storage != null) {
             storage.stopAutosave();
             storage.flushAll();
         }
-        if (serviceRegistration != null) {
-            serviceRegistration.unregister();
-            serviceRegistration = null;
+        if (registeredService != null) {
+            getServer().getServicesManager().unregister(registeredService);
+            registeredService = null;
         }
         CustomGuiAPI.shutdown();
         Codecs.reset();
+    }
+
+    /**
+     * Закрывает открытые у игроков меню плагина (рантайм-GUI, редактор,
+     * менеджер) — события закрытия отрабатывают штатно (флэш хранилища,
+     * возврат временных предметов).
+     */
+    private void closeOpenMenus() {
+        for (Player player : getServer().getOnlinePlayers()) {
+            Inventory top = player.getOpenInventory().getTopInventory();
+            InventoryHolder holder = top.getHolder();
+            if (holder instanceof GuiHolder
+                    || holder instanceof EditorHolder
+                    || holder instanceof ManagerHolder) {
+                player.closeInventory();
+            }
+        }
     }
 
     /** Перезагрузка конфигурации, языка и GUI (команда /gui reload). */

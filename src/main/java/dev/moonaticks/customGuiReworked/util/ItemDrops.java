@@ -39,8 +39,12 @@ public class ItemDrops {
                 (random.nextDouble() - 0.5) * 0.1));
         direction.multiply(0.3);
 
+        // Возвращаем только то, что игрок мог положить сам:
+        // CONTAINER/CRAFT/FUEL. DESIGN — часть GUI; RESULT (остатки
+        // незабранного «результата») игроку не принадлежит.
         for (int i = 0; i < inventory.getSize(); i++) {
-            if (gui.slotType(i) == SlotType.DESIGN) {
+            SlotType type = gui.slotType(i);
+            if (type == SlotType.DESIGN || type == SlotType.RESULT) {
                 continue;
             }
             ItemStack item = inventory.getItem(i);
@@ -56,7 +60,8 @@ public class ItemDrops {
         }
         // Чистим инвентарь, чтобы предметы не «проявились» повторно
         for (int i = 0; i < inventory.getSize(); i++) {
-            if (gui.slotType(i) != SlotType.DESIGN) {
+            SlotType type = gui.slotType(i);
+            if (type != SlotType.DESIGN && type != SlotType.RESULT) {
                 inventory.setItem(i, null);
             }
         }

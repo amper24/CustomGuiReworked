@@ -15,19 +15,15 @@ import org.bukkit.event.Event;
  * {@code %player% [is|was] viewing a cgui}
  */
 @SuppressWarnings("deprecation")
-public class CondCguiOpen implements Condition {
+public class CondCguiOpen extends Condition {
 
-    static {
-        Skript.registerCondition(CondCguiOpen.class,
-                "%player% has [a] cgui open",
-                "%player% [is|was] viewing a cgui");
-    }
 
-    private Expression<?> player;
+    private Expression<Player> player;
 
     @Override
+    @SuppressWarnings("unchecked")
     public boolean init(Expression<?>[] exprs, int matchedPattern, Kleenean isDelayed, ParseResult parser) {
-        this.player = exprs[0];
+        this.player = (Expression<Player>) exprs[0];
         return true;
     }
 

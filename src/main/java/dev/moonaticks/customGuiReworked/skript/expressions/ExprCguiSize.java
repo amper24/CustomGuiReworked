@@ -17,17 +17,13 @@ import org.bukkit.event.Event;
 @SuppressWarnings("deprecation")
 public class ExprCguiSize extends SimpleExpression<Number> {
 
-    static {
-        Skript.registerExpression(ExprCguiSize.class, Number.class, ExpressionType.COMBINED,
-                "[the] cgui size of %string%",
-                "[the] size of cgui %string%");
-    }
 
-    private Expression<?> name;
+    private Expression<String> name;
 
     @Override
+    @SuppressWarnings("unchecked")
     public boolean init(Expression<?>[] exprs, int matchedPattern, Kleenean isDelayed, ParseResult parser) {
-        this.name = exprs[0];
+        this.name = (Expression<String>) exprs[0];
         return true;
     }
 

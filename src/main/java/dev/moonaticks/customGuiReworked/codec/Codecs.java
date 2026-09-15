@@ -12,7 +12,8 @@ import java.util.Map;
  * <p>Все сохраняемые payload подписаны тегом активного кодировщика:
  * <ul>
  *   <li>{@code n1:<NBTAPI-JSON>} — эталонный формат (плагин NBTAPI);</li>
- *   <li>{@code b1:<Bukkit-JSON>} — запасной формат без NBTAPI.</li>
+ *   <li>{@code b2:<Base64-байты Paper>} — нативный бинарный формат Paper;</li>
+ *   <li>{@code b1:<Bukkit-JSON>} — устаревший формат ранних сборок 2.1.x (только чтение).</li>
  * </ul>
  *
  * <p>Благодаря подписи данные, записанные одним кодеком,
@@ -72,7 +73,9 @@ public final class Codecs {
         if (raw == null || raw.isBlank() || raw.equals("{}")) {
             return "";
         }
-        return codec.tag() + raw;
+        // Подпись строго формата «тег:данные» (Base64 у b2 сам по себе
+        // не содержит двоеточия, поэтому разделитель обязателен).
+        return codec.tag() + ":" + raw;
     }
 
     /**
