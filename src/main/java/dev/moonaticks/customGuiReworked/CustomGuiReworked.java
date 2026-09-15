@@ -28,6 +28,7 @@ import dev.moonaticks.customGuiReworked.skript.SkriptSupport;
 import dev.moonaticks.customGuiReworked.storage.StorageService;
 import org.bukkit.Bukkit;
 import org.bukkit.command.PluginCommand;
+import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
@@ -35,6 +36,12 @@ import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.plugin.ServicePriority;
 
 import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 
 /**
  * CustomGuiReworked — skeleton-based GUI framework для Paper 26.2.
@@ -159,6 +166,9 @@ public final class CustomGuiReworked extends JavaPlugin {
     /** Перезагрузка конфигурации, языка и GUI (команда /gui reload). */
     public void reloadPluginData() {
         reloadConfig();
+        // Язык мог быть переключён вместе с language-auto-update —
+        // перепроверяем версию файлов на диске перед чтением строк.
+        saveDefaultLanguageFiles();
         languageManager.load();
         registry.loadAll();
     }
@@ -184,7 +194,55 @@ public final class CustomGuiReworked extends JavaPlugin {
                 } catch (IllegalArgumentException ignored) {
                     // файл отсутствует в ресурсах
                 }
+                continue;
             }
+            refreshLanguageFile(langDir, langFile, fileName);
+        }
+    }
+
+    /**
+     * Обновляет файл языка на диске, если в jar лежит более новая версия
+     * строк (ключ {@code lang-version}). Файлы на диске создаются один раз
+     * и сами не перезаписываются, поэтому без этой проверки старая копия
+     * показывала бы старые формулировки и символы.
+     *
+     * <p>Прежний файл сохраняется рядом как {@code <имя>.bak}. Проверку
+     * можно выключить через {@code language-auto-update: false} в config.yml.
+     */
+    private void refreshLanguageFile(File langDir, File langFile, String fileName) {
+        int bundled = bundledLangVersion(fileName);
+        int onDisk = YamlConfiguration.loadConfiguration(langFile).getInt("lang-version", 1);
+        if (bundled <= onDisk) {
+            return;
+        }
+        if (!getConfig().getBoolean("language-auto-update", true)) {
+            getLogger().info("Language file " + fileName + " is outdated (v" + onDisk
+                    + " -> v" + bundled + "), auto-update is disabled in config.yml");
+            return;
+        }
+        File backup = new File(langDir, fileName + ".bak");
+        try {
+            Files.copy(langFile.toPath(), backup.toPath(), StandardCopyOption.REPLACE_EXISTING);
+            saveResource("lang/" + fileName, true);
+            getLogger().info("Updated language file " + fileName + " (v" + onDisk + " -> v" + bundled
+                    + "), previous copy kept as " + backup.getName());
+        } catch (IOException | IllegalArgumentException e) {
+            getLogger().warning("Could not update language file " + fileName + ": " + e.getMessage());
+        }
+    }
+
+    /** Версия строк во встроенном ресурсе lang/<имя> (1, если ключа нет). */
+    private int bundledLangVersion(String fileName) {
+        try (InputStream in = getResource("lang/" + fileName)) {
+            if (in == null) {
+                return 0;
+            }
+            YamlConfiguration config = YamlConfiguration.loadConfiguration(
+                    new InputStreamReader(in, StandardCharsets.UTF_8));
+            return config.getInt("lang-version", 1);
+        } catch (IOException e) {
+            getLogger().warning("Could not read bundled lang/" + fileName + ": " + e.getMessage());
+            return 0;
         }
     }
 

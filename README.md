@@ -51,7 +51,10 @@ integration (ItemsAdder + CraftEngine) and a library-ready public API.
 2. (Recommended) install **NBTAPI** — full NBT fidelity for stored items.
 3. Start the server. Configuration is auto-created:
    - `plugins/CustomGuiReworked/config.yml` — language, autosave, options;
-   - `plugins/CustomGuiReworked/lang/{en,ru}.yml` — translations;
+   - `plugins/CustomGuiReworked/lang/{en,ru}.yml` — translations
+     (refreshed from the jar when their `lang-version` is older than the
+     bundled one; the previous copy is kept as `<name>.yml.bak`, opt out
+     with `language-auto-update: false`);
    - `plugins/CustomGuiReworked/tables/` — GUI definitions (editor);
    - `plugins/CustomGuiReworked/custom/` — GUI definitions registered by other plugins (API);
    - `plugins/CustomGuiReworked/data/` — storage (players, teams, globals);
