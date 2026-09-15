@@ -108,7 +108,7 @@ class GuiOpenerLocalDesignTest {
         ItemStack fileItem = mockItem(Material.IRON_INGOT, 1, fileClone);
         ItemStack localClone = mockItem(Material.GOLD_INGOT, 1, null);
         ItemStack localItem = mockItem(Material.GOLD_INGOT, 1, localClone);
-        codec.byPayload = Map.of("m1:base", fileItem);
+        codec.byPayload = Map.of("base", fileItem);
         gui.setDesignAt(0, "m1:base");
 
         GuiHolder holder = new GuiHolder(gui, StorageKey.global("test.yml"));
@@ -128,7 +128,7 @@ class GuiOpenerLocalDesignTest {
         Gui gui = new Gui("test");
         ItemStack fileClone = mockItem(Material.IRON_INGOT, 1, null);
         ItemStack fileItem = mockItem(Material.IRON_INGOT, 1, fileClone);
-        codec.byPayload = Map.of("m1:base", fileItem);
+        codec.byPayload = Map.of("base", fileItem);
         gui.setDesignAt(0, "m1:base");
 
         GuiHolder holder = new GuiHolder(gui, StorageKey.global("test.yml"));
@@ -163,7 +163,7 @@ class GuiOpenerLocalDesignTest {
         Gui gui = new Gui("test");
         ItemStack fileClone = mockItem(Material.IRON_INGOT, 1, null);
         ItemStack fileItem = mockItem(Material.IRON_INGOT, 1, fileClone);
-        codec.byPayload = Map.of("m1:base", fileItem);
+        codec.byPayload = Map.of("base", fileItem);
         gui.setDesignAt(0, "m1:base");
         GuiHolder holder = new GuiHolder(gui, StorageKey.global("test.yml"));
         Inventory inv = mock(Inventory.class);
@@ -250,7 +250,7 @@ class GuiOpenerLocalDesignTest {
         Gui gui = new Gui("test");
         ItemStack fileClone = mockItem(Material.IRON_INGOT, 1, null);
         ItemStack fileItem = mockItem(Material.IRON_INGOT, 1, fileClone);
-        codec.byPayload = Map.of("m1:base", fileItem);
+        codec.byPayload = Map.of("base", fileItem);
         gui.setDesignAt(0, "m1:base");
         ItemStack localClone = mockItem(Material.GOLD_INGOT, 1, null);
         ItemStack localItem = mockItem(Material.GOLD_INGOT, 1, localClone);
@@ -284,7 +284,7 @@ class GuiOpenerLocalDesignTest {
         Gui gui = new Gui("test");
         ItemStack fileClone = mockItem(Material.IRON_INGOT, 1, null);
         ItemStack fileItem = mockItem(Material.IRON_INGOT, 1, fileClone);
-        codec.byPayload = Map.of("m1:base", fileItem);
+        codec.byPayload = Map.of("base", fileItem);
         gui.setDesignAt(0, "m1:base");
         GuiHolder holder = new GuiHolder(gui, StorageKey.global("test.yml"));
 
