@@ -101,10 +101,15 @@ Slot commands support placeholders: `%player%`, `%slot%`.
 | `team` | per Bukkit team | `data/teams/<team>_<table>` |
 | `temporary` | session | nothing persisted; items returned on close |
 
-Data format: JSON array of **tagged** item payloads
-(`n1:<NBTAPI-json>` or `b1:<bukkit-json>`). Payloads written by either
-codec are readable by both — the codec is pinned per payload, so data
-survives installing/removing NBTAPI.
+Data format: JSON array of **tagged** item payloads:
+
+- `n1:` — NBT-API JSON (active when NBTAPI is installed, full NBT fidelity);
+- `b2:` — native Paper `ItemStack.serializeAsBytes()` + Base64 (fallback
+  without NBTAPI, still preserves components/PDC/enchantments);
+- `b1:` — early-2.1.x Bukkit-map format, **read-only**, rewritten on next save.
+
+The codec is pinned per payload, so data survives installing/removing
+NBTAPI and swapping between codecs.
 
 **Upgrading from 1.x**: old storage files and `tables/*.yml` are
 read in place and migrated on first access (no manual steps, paths
@@ -141,16 +146,46 @@ if (service != null) {
 ```
 
 > To resolve `GuiService` by name you only need the interface on your
-> compile classpath: `compileOnly files('libs/CustomGuiReworked-2.1.0.jar')`.
+> compile classpath: `compileOnly files('libs/CustomGuiReworked.jar')`.
 
-### With the full dependency
+### With the full dependency (JitPack / Maven)
+
+The API is published from this repository via
+[JitPack](https://jitpack.io/#amper24/CustomGuiReworked) — it builds the
+artifact on first request by tag:
 
 ```groovy
+repositories {
+    maven { url = 'https://jitpack.io' }
+}
+
 dependencies {
-    compileOnly files('libs/CustomGuiReworked-2.1.0.jar')
-    // или compileOnly 'dev.moonaticks:customguireworked:2.1.0', если опубликован
+    compileOnly 'com.github.amper24:CustomGuiReworked:2.2.0'
 }
 ```
+
+```xml
+<repository>
+    <id>jitpack.io</id>
+    <url>https://jitpack.io</url>
+</repository>
+<dependency>
+    <groupId>com.github.amper24</groupId>
+    <artifactId>CustomGuiReworked</artifactId>
+    <version>2.2.0</version>
+    <scope>provided</scope>
+</dependency>
+```
+
+Or use the release jar directly: `compileOnly files('libs/CustomGuiReworked.jar')`.
+**Never shade** the plugin into your jar — it stays `compileOnly`;
+add `softdepend: [CustomGuiReworked]` to your `plugin.yml`.
+
+> **Full developer guide: [API.md](API.md)** — dependency setup, GUI
+> builder, storage access, events, custom blocks, Skript/Denizen,
+> threading model and pitfalls.
+
+### Example: fluent GUI creation
 
 ```java
 // Fluent GUI creation
@@ -179,9 +214,13 @@ CustomGuiAPI.writeStorage(StorageType.GLOBAL, "", "counters",
 
 | Event | Purpose |
 |---|---|
-| `GuiOpenEvent` | fired before opening; **cancellable** |
-| `GuiCloseEvent` | fired after close (save already scheduled) |
-| `GuiSlotClickEvent` | fired per slot click; cancelling blocks bound commands |
+| `GuiOpenEvent` | fired before opening; **cancellable**; exposes the resolved `StorageKey` |
+| `GuiCloseEvent` | fired after close (final reconcile + save already done) |
+| `GuiSlotClickEvent` | per top-inventory click (design buttons included); click/action/cursor/hotbar context; two-level cancellation (commands only vs. the vanilla click itself) |
+| `GuiDragEvent` | item distributed over GUI slots; **cancellable**; immutable affected-slot list (drag over design/result slots is blocked before the event) |
+
+The same four events exist in Skript (`on cgui open/close/click/drag`)
+and Denizen (`on cgui ...`, contexts `player`, `gui`, `slot`, `slots`).
 
 ### Registering GUIs from another plugin
 
@@ -305,8 +344,33 @@ Denizen scripts can also just run the Bukkit command:
 ## Building
 
 - **JDK 25**, Gradle 9 (wrapper included).
-- `./gradlew build` → `build/libs/CustomGuiReworked-2.1.0.jar`
+- `./gradlew build` → `build/libs/CustomGuiReworked.jar`
 - `./gradlew runServer` — launches a Paper 26.2 test server.
+
+## Changelog (2.2.0)
+
+- **Storage hardening** — dedicated single I/O thread; dirty flags are
+  kept until a write succeeds (failed writes retried after 5s, no more
+  silent data loss); block writes while a world is unloaded are retried
+  after it loads; region flush on `WorldUnloadEvent`; all menus close on
+  shutdown before the final synchronous flush.
+- **Anti-dupe fixes** — block break synchronizes open viewers into the
+  region cache before dropping items (an item pulled onto the cursor in
+  the coalesce window could both drop and remain); two rapid open
+  requests no longer cancel each other; orphaned `.tmp-<uuid>` files
+  from hard crashes are swept on startup/first access.
+- **Registry fixes** — re-registering a renamed GUI detaches its old
+  name/block bindings and removes the stale file; CUSTOM→RUNTIME
+  downgrade cleans the old directory.
+- **`GuiDragEvent`** added (API + Skript + Denizen, `context.slots`);
+  click event exposes action/cursor/hotbar button/handle and two-level
+  cancellation; double-click can no longer collect design items;
+  placing into RESULT is blocked from every direction.
+- **Modern chat API** — editor/manager prompts use Paper
+  `AsyncChatEvent` (Adventure `Component`) instead of the legacy
+  `AsyncPlayerChatEvent`.
+- **API publishing** — JitPack support (`com.github.amper24:CustomGuiReworked`),
+  sources jar, full developer guide in [API.md](API.md); 64 unit tests.
 
 ## Changelog (2.1.0)
 

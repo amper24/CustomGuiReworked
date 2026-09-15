@@ -4,6 +4,7 @@ import dev.moonaticks.customGuiReworked.CustomGuiReworked;
 import dev.moonaticks.customGuiReworked.api.Gui;
 import dev.moonaticks.customGuiReworked.api.SlotType;
 import dev.moonaticks.customGuiReworked.api.StorageType;
+import io.papermc.paper.event.player.AsyncChatEvent;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.Bukkit;
@@ -16,7 +17,6 @@ import org.bukkit.event.inventory.ClickType;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
-import org.bukkit.event.player.AsyncPlayerChatEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
@@ -128,7 +128,7 @@ public class EditorListener implements Listener {
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
-    public void onChat(AsyncPlayerChatEvent event) {
+    public void onChat(AsyncChatEvent event) {
         Player player = event.getPlayer();
         EditorSession session = editor.session(player.getUniqueId());
         if (session == null || session.prompt() == EditorSession.Prompt.NONE) {
@@ -137,7 +137,7 @@ public class EditorListener implements Listener {
         event.setCancelled(true);
         EditorSession.Prompt prompt = session.prompt();
         session.prompt(EditorSession.Prompt.NONE);
-        String message = event.getMessage().trim();
+        String message = PLAIN.serialize(event.message()).trim();
         if (message.isEmpty() || message.equalsIgnoreCase("/cancel")) {
             player.sendMessage(editor.lang().msg("editor.promptCancelled"));
             return;

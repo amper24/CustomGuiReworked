@@ -1,0 +1,4 @@
+# JitPack-сборка CustomGuiReworked.
+# Проект компилируется под Java 25 (Paper 26.2) — выбираем JDK 25 в образе.
+jdk:
+  - openjdk25

@@ -1,5 +1,6 @@
 plugins {
     id 'java'
+    id 'maven-publish'
     id "xyz.jpenilla.run-paper" version "3.1.0"
 }
 
@@ -101,5 +102,54 @@ processResources {
     filteringCharset 'UTF-8'
     filesMatching('plugin.yml') {
         expand props
+    }
+}
+
+// ================= публикация (JitPack / Maven Local) =================
+// Для потребителей API:
+//   repositories { maven { url 'https://jitpack.io' } }
+//   dependencies { compileOnly 'com.github.amper24:CustomGuiReworked:2.2.0' }
+// JitPack при первом обращении собирает этот Gradle-проект
+// (publishToMavenLocal) и раздаёт артефакт по тегу.
+java {
+    withSourcesJar()
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            // groupId/artifactId оставлены дефолтными (dev.moonaticks /
+            // CustomGuiReworked для mavenLocal); JitPack раздаёт проект
+            // по координате com.github.amper24:CustomGuiReworked:<тег>.
+            from components.java
+            pom {
+                name = 'CustomGuiReworked'
+                description = 'Skeleton-based custom GUI framework for Paper: visual editor, ' +
+                        'persistent block/personal/global/team storage, ItemsAdder & CraftEngine ' +
+                        'block support, Skript & Denizen integration and a library-ready API.'
+                url = 'https://github.com/amper24/CustomGuiReworked'
+                licenses {
+                    license {
+                        name = 'MIT License'
+                        url = 'https://opensource.org/licenses/MIT'
+                    }
+                }
+                developers {
+                    developer {
+                        id = 'moonaticks'
+                        name = 'moonaticks'
+                    }
+                }
+                scm {
+                    connection = 'scm:git:git://github.com/amper24/CustomGuiReworked.git'
+                    developerConnection = 'scm:git:ssh://github.com/amper24/CustomGuiReworked.git'
+                    url = 'https://github.com/amper24/CustomGuiReworked'
+                }
+                issueManagement {
+                    system = 'GitHub Issues'
+                    url = 'https://github.com/amper24/CustomGuiReworked/issues'
+                }
+            }
+        }
     }
 }

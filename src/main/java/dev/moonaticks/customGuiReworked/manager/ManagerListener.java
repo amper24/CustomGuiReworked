@@ -1,12 +1,13 @@
 package dev.moonaticks.customGuiReworked.manager;
 
 import dev.moonaticks.customGuiReworked.CustomGuiReworked;
+import io.papermc.paper.event.player.AsyncChatEvent;
+import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.inventory.InventoryClickEvent;
-import org.bukkit.event.player.AsyncPlayerChatEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.Inventory;
 
@@ -66,7 +67,7 @@ public class ManagerListener implements Listener {
      * Событие асинхронное — саму логику выполняем на основном потоке.
      */
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
-    public void onChat(AsyncPlayerChatEvent event) {
+    public void onChat(AsyncChatEvent event) {
         Player player = event.getPlayer();
         ManagerSession session = manager.session(player.getUniqueId());
         boolean awaitingInput = session != null
@@ -75,8 +76,10 @@ public class ManagerListener implements Listener {
             return;
         }
         event.setCancelled(true);
-        String message = event.getMessage();
-        plugin.getServer().getScheduler().runTask(plugin, () -> manager.onChat(player, message));
+        String message = PlainTextComponentSerializer.plainText()
+                .serialize(event.message()).trim();
+        final String text = message;
+        plugin.getServer().getScheduler().runTask(plugin, () -> manager.onChat(player, text));
     }
 
     @EventHandler
