@@ -62,13 +62,17 @@ public final class DesignItems {
         if (amount < 1) {
             amount = 1;
         }
-        clone.setMaxStackSize(amount);
 
-        // Скрытый PDC-маркер делает дизайн-предмет не-similar обычным предметам игрока
-        // → double-click не стягивает декор на курсор.
+        // В Paper 1.21.5+ setMaxStackSize переехал из ItemStack в ItemMeta
+        // (item-level max stack теперь задаётся через meta).
         ItemMeta meta = clone.getItemMeta();
-        if (meta != null && markerKey != null) {
-            meta.getPersistentDataContainer().set(markerKey, PersistentDataType.BYTE, (byte) 1);
+        if (meta != null) {
+            meta.setMaxStackSize(amount);
+            // Скрытый PDC-маркер делает дизайн-предмет не-similar обычным предметам игрока
+            // → double-click не стягивает декор на курсор.
+            if (markerKey != null) {
+                meta.getPersistentDataContainer().set(markerKey, PersistentDataType.BYTE, (byte) 1);
+            }
             clone.setItemMeta(meta);
         }
         return clone;
