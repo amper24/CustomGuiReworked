@@ -605,6 +605,29 @@ ItemStack safe = CustomGuiAPI.prepareDesignItem(item);
 `InventoryView#setWindowTitle` (когда метод есть в сборке Paper),
 иначе — при следующем открытии.
 
+Пример — бочка с жидкостью (пустые DESIGN-слоты в файле, уровень
+показывается локально):
+
+```java
+@EventHandler
+public void onBarrelOpen(GuiOpenEvent e) {
+    if (!"barrel".equals(e.getGui().name())) {
+        return;
+    }
+    StorageKey key = e.getStorageKey();
+    if (key.type() != StorageType.BLOCK) {
+        return;
+    }
+    Location block = StorageKey.blockLocation(key.owner()); // «world:x,y,z» → Location
+    int level = getFluidLevel(block);                        // 0..100
+    CustomGuiAPI.setLocalDesigns(e.getPlayer(), Map.of(
+            10, createFluidItem(level),
+            11, createFluidItem(level),
+            12, createFluidItem(level)));
+    CustomGuiAPI.setLocalTitle(e.getPlayer(), "§bБочка " + level + "%");
+}
+```
+
 ---
 
 ## 15. Функциональные блоки (печь, верстак, бочка, генератор)
