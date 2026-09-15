@@ -1,3 +1,9 @@
+# Version of the bundled strings. Bump it when values below change:
+# on startup the plugin refreshes the file on disk when its version is
+# older (the previous file is kept next to it as <name>.bak).
+# Can be disabled in config.yml: language-auto-update: false
+lang-version: 2
+
 language:
   # ---------- Common ----------
   noPermission: "§cYou don't have permission to do that."
@@ -9,7 +15,7 @@ language:
 
   # ---------- Editor ----------
   editor:
-    mainTitle: "§8[ⒼⓊⓘ ⒺⒹⓘⓉⓄⓇ] §f%s"
+    mainTitle: "§6Editor: §f%s"
     sizeTitle: "§eSlots: §f%s"
     skeletonTitle: "§6Skeleton: §f%s"
     designTitle: "§aDesign: §f%s"
@@ -42,6 +48,8 @@ language:
       empty: "§7Empty"
       locked: "§cLocked (skeleton slot)"
       lockedClick: "§cThis slot is part of the skeleton. Use §6Slot types §cto change it."
+      noSpace: "§cNo free design slot — clear some space and try again."
+      returned: "§eAn item from a service slot was returned to your inventory."
     blocks:
       add: "§eAdd block ID"
       removeHint: "§7Right-Click — unbind"
@@ -88,8 +96,8 @@ language:
   # ---------- Management menu ----------
   manager:
     title:
-      list: "§8[ⒼⓊⓘ ⓂⒺ⒩⒰⒢ⓄⓇ] §fGUI list"
-      options: "§8[ⒼⓊⓘ ⓂⒺ⒩⒰⒢ⓄⓇ] §fGUI: §f%s"
+      list: "§6GUI list"
+      options: "§6GUI: §f%s"
     filler: " "
     btn:
       search: "§bSearch"
@@ -99,8 +107,8 @@ language:
       reload: "§6Reload all"
       reloadHint: "§7Re-read all GUI files."
       status: "§fStatus"
-      prev: "§e◀ Previous page"
-      next: "§eNext page ▶"
+      prev: "§ePrevious page"
+      next: "§eNext page"
       page: "§fPage §6%s/%s"
     status:
       count: "§7GUIs: §f%s"

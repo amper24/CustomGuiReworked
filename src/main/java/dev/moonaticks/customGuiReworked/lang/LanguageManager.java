@@ -6,6 +6,10 @@ import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.bukkit.configuration.file.YamlConfiguration;
 
 import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -20,6 +24,8 @@ public class LanguageManager {
 
     private final CustomGuiReworked plugin;
     private final Map<String, String> enMessages = new HashMap<>();
+    /** Значения из jar — последний резерв для ключей, которых нет на диске. */
+    private final Map<String, String> bundledMessages = new HashMap<>();
     private Map<String, String> messages = new HashMap<>();
     private String language = "en";
 
@@ -35,6 +41,10 @@ public class LanguageManager {
     /** (Пере)загружает язык из config.yml и файлов lang/. */
     public void load() {
         enMessages.clear();
+        bundledMessages.clear();
+        // Резерв из jar: файлы на диске создаются один раз и не обновляются,
+        // поэтому новые ключи иначе показывались бы как «editor.someKey».
+        loadBundledDefaults();
         Map<String, String> current = new HashMap<>();
         loadFile(new File(plugin.getDataFolder(), "lang/en.yml"), enMessages);
 
@@ -51,6 +61,29 @@ public class LanguageManager {
             current.putAll(enMessages);
         }
         this.messages = current;
+    }
+
+    /** Читает lang/en.yml прямо из ресурсов плагина (в обход файла на диске). */
+    private void loadBundledDefaults() {
+        try (InputStream in = plugin.getResource("lang/en.yml")) {
+            if (in == null) {
+                return;
+            }
+            YamlConfiguration config = YamlConfiguration.loadConfiguration(
+                    new InputStreamReader(in, StandardCharsets.UTF_8));
+            var section = config.getConfigurationSection("language");
+            if (section == null) {
+                return;
+            }
+            for (String key : section.getKeys(true)) {
+                String value = config.getString("language." + key);
+                if (value != null) {
+                    bundledMessages.put(key, value);
+                }
+            }
+        } catch (IOException e) {
+            plugin.getLogger().warning("Could not read bundled lang/en.yml: " + e.getMessage());
+        }
     }
 
     private void loadFile(File file, Map<String, String> target) {
@@ -71,12 +104,16 @@ public class LanguageManager {
     }
 
     /**
-     * Сырое сообщение с кодами § (fallback на en, затем на сам ключ).
+     * Сырое сообщение с кодами § (fallback: файл языка → en на диске →
+     * en из jar → сам ключ).
      */
     public String raw(String key) {
         String value = messages.get(key);
         if (value == null) {
             value = enMessages.get(key);
+        }
+        if (value == null) {
+            value = bundledMessages.get(key);
         }
         return value == null ? key : value;
     }
