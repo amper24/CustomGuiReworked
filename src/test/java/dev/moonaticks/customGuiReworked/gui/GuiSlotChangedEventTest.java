@@ -168,7 +168,8 @@ class GuiSlotChangedEventTest {
         codec.decodeMap.put("e1", resultClone);
 
         GuiHolder holder = new GuiHolder(gui, StorageKey.global("furnace.yml"));
-        holder.setPlayer(UUID.randomUUID());
+        UUID playerUuid = UUID.randomUUID();
+        holder.setPlayer(playerUuid);
         Inventory inv = mock(Inventory.class);
         holder.attach(inv);
         String[] baseline = new String[gui.slots()];
@@ -179,7 +180,7 @@ class GuiSlotChangedEventTest {
         try (MockedStatic<Bukkit> bukkit = mockStatic(Bukkit.class)) {
             PluginManager pm = mock(PluginManager.class);
             bukkit.when(Bukkit::getPluginManager).thenReturn(pm);
-            bukkit.when(() -> Bukkit.getPlayer(any())).thenReturn(mock(Player.class));
+            bukkit.when(() -> Bukkit.getPlayer(playerUuid)).thenReturn(mock(Player.class));
 
             opener.reconcile(holder, Set.of(22));
 
