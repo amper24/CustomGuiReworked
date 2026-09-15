@@ -24,10 +24,14 @@ import org.bukkit.inventory.meta.ItemMeta;
 /**
  * Обработка взаимодействия с редактором GUI.
  *
- * <p>В отличие от старого «TableEditorListener»: все клики отменяются по
- * умолчанию (нет случайного переноса), экраны не «мигают» (обновление
- * на месте), AIR-слоты не бросают исключение, чат-промпты отменяются
- * командой /cancel.
+ * <p>В отличие от старого «TableEditorListener»: клики по служебным панелям
+ * отменяются по умолчанию (нет случайного переноса), экраны не «мигают»
+ * (обновление на месте), AIR-слоты не бросают исключение, чат-промпты
+ * отменяются командой /cancel.
+ *
+ * <p>Исключение — экран DESIGN: предметы дизайна берут из своего инвентаря
+ * (клик, shift-клик, драг), поэтому работа с инвентарём игрока там разрешена,
+ * а панели-заглушки на время переноса снимаются.
  */
 public class EditorListener implements Listener {
 
@@ -57,10 +61,7 @@ public class EditorListener implements Listener {
         }
         int slot = event.getRawSlot();
         if (slot < 0 || slot >= top.getSize()) {
-            // Сдвиг из нижнего инвентаря может положить предмет в дизайн-слот
-            if (holder.screen() == EditorHolder.Screen.DESIGN && event.isShiftClick()) {
-                scheduleCapture(player, session);
-            }
+            onPlayerInventoryClick(player, session, holder, event, top);
             return;
         }
         switch (holder.screen()) {
@@ -89,19 +90,71 @@ public class EditorListener implements Listener {
         }
         Gui gui = session.gui();
         if (holder.screen() == EditorHolder.Screen.DESIGN) {
+            // Драг не отменяем: раскладку делает ваниль. Но служебные панели
+            // игроку не принадлежат и мешают переносу:
+            //  • «забор» предметов драгом утащил бы панели в курсор;
+            //  • панель «Пусто» делает пустой дизайн-слот «занятым» —
+            //    ваниль в такой слот ничего не положит.
+            // Поэтому панели снимаем (captureDesign вернёт их на место).
+            ItemStack cursor = event.getOldCursor();
+            boolean taking = cursor == null || cursor.getType() == Material.AIR;
             for (int slot : event.getRawSlots()) {
                 if (slot < 0 || slot >= top.getSize()) {
-                    continue;
+                    continue; // инвентарь игрока — обычный драг
                 }
-                if (gui.slotType(slot) != SlotType.DESIGN) {
-                    event.setCancelled(true);
-                    return;
+                if (taking || gui.slotType(slot) == SlotType.DESIGN) {
+                    editor.releasePane(top, slot);
                 }
             }
             scheduleCapture(player, session);
             return;
         }
         event.setCancelled(true);
+    }
+
+    /**
+     * Клик по инвентарю самого игрока.
+     *
+     * <p>Панели редактора служебные, поэтому «случайные» переносы по
+     * умолчанию запрещены. Исключение — экран DESIGN, где предметы дизайна
+     * как раз берут из своего инвентаря:
+     * <ul>
+     *   <li>обычный клик (взять предмет на курсор, вернуть обратно, цифровая
+     *       клавиша, свап с офхендом) разрешён — взятый на курсор предмет
+     *       затем кладётся в дизайн-слот обычным кликом;</li>
+     *   <li>shift-клик переносит предмет в дизайн-слоты: панели «Пусто»
+     *       снимаются (для ванили такой слот «занят», и перенос не сработал
+     *       бы), после чего клик отдаётся ванили; панели скелета остаются
+     *       на месте и закрывают служебные слоты от переноса;</li>
+     *   <li>double-click запрещён: он собрал бы на курсор предметы из
+     *       самого дизайна.</li>
+     * </ul>
+     */
+    private void onPlayerInventoryClick(Player player, EditorSession session, EditorHolder holder,
+                                        InventoryClickEvent event, Inventory top) {
+        if (holder.screen() != EditorHolder.Screen.DESIGN) {
+            return; // клик остаётся отменённым: панели редактора предметы не принимают
+        }
+        if (event.getRawSlot() < 0) {
+            // Клик вне окна (сброс предмета с курсора) — обычное поведение.
+            event.setCancelled(false);
+            return;
+        }
+        if (event.isShiftClick()) {
+            if (editor.prepareDesignTransfer(player, session, top, event.getCurrentItem())) {
+                // Раскладку делает сама ваниль: освобождённые дизайн-слоты
+                // она заполнит предметом, а панели скелета заняты и защищают
+                // служебные слоты от переноса. Если места нет — клик так и
+                // остаётся отменённым (игрок получил сообщение).
+                event.setCancelled(false);
+                scheduleCapture(player, session);
+            }
+            return;
+        }
+        if (event.getClick() == ClickType.DOUBLE_CLICK) {
+            return; // клик остаётся отменённым
+        }
+        event.setCancelled(false); // со своим инвентарём работаем как обычно
     }
 
     /** При закрытии редактора сбрасываем активный чат-промпт (без «фантомного» перехвата чата). */
@@ -111,19 +164,19 @@ public class EditorListener implements Listener {
             return;
         }
         Inventory top = event.getView().getTopInventory();
-        if (!(top.getHolder() instanceof EditorHolder)) {
+        if (!(top.getHolder() instanceof EditorHolder holder)) {
             return;
         }
         EditorSession session = editor.session(player.getUniqueId());
-        if (session != null) {
-            session.prompt(EditorSession.Prompt.NONE);
+        if (session == null) {
+            return;
         }
-        // При выключении плагина отложенный (1 тик) захват дизайна уже не
-        // выполнится — снимаем дизайн синхронно, пока инвентарь открыт.
-        if (session != null && top.getHolder() instanceof EditorHolder editorHolder
-                && editorHolder.screen() == EditorHolder.Screen.DESIGN
-                && !plugin.isEnabled()) {
-            editor.captureDesign(player, session);
+        session.prompt(EditorSession.Prompt.NONE);
+        // Дизайн снимаем синхронно, пока инвентарь ещё открыт: отложенный
+        // (на 1 тик) захват не успел бы, если игрок закрывает редактор сразу
+        // после клика, а при выключении плагина не выполнился бы вовсе.
+        if (holder.screen() == EditorHolder.Screen.DESIGN) {
+            editor.captureDesign(player, session, top);
         }
     }
 
@@ -208,7 +261,13 @@ public class EditorListener implements Listener {
             player.sendMessage(editor.lang().msg("editor.design.lockedClick"));
             return;
         }
-        ItemStack current = event.getView().getTopInventory().getItem(slot);
+        if (event.getClick() == ClickType.DOUBLE_CLICK) {
+            // Double-click собрал бы на курсор предметы из всего окна,
+            // включая сам дизайн, — не даём унести оформление случайно.
+            return;
+        }
+        Inventory top = event.getView().getTopInventory();
+        ItemStack current = top.getItem(slot);
         // Placeholder «пустого слота» забирать нельзя, но поверх него
         // можно ПОЛОЖИТЬ предмет (курсор/цифровая клавиша/офхенд) —
         // именно так пустой дизайн-слот заполняется предметом.
@@ -227,6 +286,11 @@ public class EditorListener implements Listener {
                 wantsPlace = cursorOnPlaceholder != null && cursorOnPlaceholder.getType() != Material.AIR;
             }
             if (wantsPlace) {
+                // Панель «Пусто» убираем сами: иначе ваниль не положит
+                // предмет в «занятый» слот, а обменяет их (панель уехала бы
+                // в хотбар). Свежую панель вернёт captureDesign, если слот
+                // в итоге остался пустым.
+                editor.releasePane(top, slot);
                 event.setCancelled(false);
                 scheduleCapture(player, session);
             } else if (clickType == ClickType.RIGHT) {

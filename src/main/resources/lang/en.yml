@@ -42,6 +42,8 @@ language:
       empty: "§7Empty"
       locked: "§cLocked (skeleton slot)"
       lockedClick: "§cThis slot is part of the skeleton. Use §6Slot types §cto change it."
+      noSpace: "§cNo free design slot — clear some space and try again."
+      returned: "§eAn item from a service slot was returned to your inventory."
     blocks:
       add: "§eAdd block ID"
       removeHint: "§7Right-Click — unbind"

@@ -82,8 +82,12 @@ Slot commands support placeholders: `%player%`, `%slot%`.
 - **Slot types (skeleton)** — click cycles the type of a slot
   (`Design → Container → Craft → Result → Fuel`), shift-click forces
   `Design`;
-- **Design** — place items into design slots; right-click an empty
-  hand on a slot clears it; skeleton slots are locked;
+- **Design** — place items into the design slots straight from your own
+  inventory: pick an item up onto the cursor and click a slot,
+  shift-click it in your inventory, or drag it across the slots;
+  right-click with an empty hand clears a slot; skeleton slots are
+  locked, and double-click is disabled so the design can't be collected
+  by accident;
 - **Title** — chat prompt (`/cancel` aborts);
 - **Data storage** — choose the storage type;
 - **Preview** — opens the GUI as players will see it;

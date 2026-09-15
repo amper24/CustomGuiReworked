@@ -32,8 +32,9 @@ import java.util.concurrent.ConcurrentHashMap;
  *   <li><b>SIZE</b> — выбор размера (9..54);</li>
  *   <li><b>SKELETON</b> — типы слотов (клик — циклическая смена,
  *       shift-клик — Design);</li>
- *   <li><b>DESIGN</b> — расстановка предметов в дизайн-слотах
- *       (right-click по пустому — очистить);</li>
+ *   <li><b>DESIGN</b> — расстановка предметов в дизайн-слотах: предмет
+ *       берут из своего инвентаря (клик, shift-клик, драг), right-click
+ *       по пустому — очистить;</li>
  *   <li><b>STORAGE</b> — тип хранилища;</li>
  *   <li><b>BLOCKS</b> — привязка ID кастомных блоков.</li>
  * </ul>
@@ -178,10 +179,10 @@ public class EditorManager {
                 if (item != null && item.getType() != Material.AIR) {
                     inv.setItem(i, item);
                 } else {
-                    inv.setItem(i, item(Material.LIME_STAINED_GLASS_PANE, lang.raw("editor.design.empty")));
+                    inv.setItem(i, emptyPane());
                 }
             } else {
-                inv.setItem(i, item(Material.BLACK_STAINED_GLASS_PANE, lang.raw("editor.design.locked")));
+                inv.setItem(i, lockedPane());
             }
         }
         return inv;
@@ -273,39 +274,167 @@ public class EditorManager {
         if (inv == null) {
             return;
         }
+        captureDesign(player, session, inv);
+    }
+
+    /**
+     * Снимок дизайна с указанного инвентаря экрана DESIGN.
+     *
+     * <p>Заодно приводит служебные слоты в исходный вид: возвращает на место
+     * снятые панели («пусто» в дизайн-слотах, «заблокировано» в слотах
+     * скелета) и отдаёт игроку предметы, которые ваниль могла положить
+     * в служебный слот драгом.
+     *
+     * @param inv инвентарь экрана DESIGN (может быть уже закрывающимся)
+     */
+    public void captureDesign(Player player, EditorSession session, Inventory inv) {
         Gui gui = session.gui();
         boolean changed = false;
-        for (int i = 0; i < gui.slots(); i++) {
-            if (gui.slotType(i) != SlotType.DESIGN) {
-                continue;
-            }
-            ItemStack item = inv.getItem(i);
-            if (item != null && isPlaceholderItem(item)) {
-                continue; // служебная панель «пусто» — не сохраняем
-            }
-            String encoded = Codecs.encode(item);
-            if (!encoded.equals(gui.designAt(i))) {
-                gui.setDesignAt(i, encoded);
-                changed = true;
+        for (int i = 0; i < gui.slots() && i < inv.getSize(); i++) {
+            ItemStack current = inv.getItem(i);
+            if (gui.slotType(i) == SlotType.DESIGN) {
+                if (current != null && isPlaceholderItem(current)) {
+                    continue; // служебная панель «пусто» — не сохраняем
+                }
+                String encoded = Codecs.encode(current);
+                if (!encoded.equals(gui.designAt(i))) {
+                    gui.setDesignAt(i, encoded);
+                    changed = true;
+                }
+                // Возвращаем визуальную панель в опустевший слот,
+                // чтобы экран не «дырявился» после забора предметов.
+                if (current == null || current.getType() == Material.AIR) {
+                    inv.setItem(i, emptyPane());
+                }
+            } else if (current == null || current.getType() == Material.AIR) {
+                inv.setItem(i, lockedPane());
+            } else if (!isScreenPane(current)) {
+                // Ваниль уронила предмет в служебный слот — возвращаем игроку.
+                inv.setItem(i, lockedPane());
+                giveBack(player, current);
+                player.sendMessage(lang.msg("editor.design.returned"));
             }
         }
         if (changed) {
             registry.save(gui);
             player.sendMessage(lang.msg("editor.saved"));
         }
-        // Возвращаем визуальные панели в опустевшие слоты,
-        // чтобы экран не «дырявился» после забора предметов.
-        for (int i = 0; i < gui.slots(); i++) {
-            if (gui.slotType(i) == SlotType.DESIGN
-                    && (inv.getItem(i) == null || inv.getItem(i).getType() == Material.AIR)) {
-                inv.setItem(i, item(Material.LIME_STAINED_GLASS_PANE, lang.raw("editor.design.empty")));
+    }
+
+    /**
+     * Готовит экран DESIGN к ванильному переносу предмета из инвентаря
+     * игрока (shift-клик): проверяет, есть ли куда класть, и снимает панели
+     * «Пусто» — для ванили такой слот «занят» чужим предметом, и перенос
+     * в него не сработал бы. Панели скелета остаются на месте: занятый слот
+     * ваниль не перезаписывает, поэтому служебные слоты защищены.
+     *
+     * @return false, если перенос невозможен (игрок уже получил сообщение)
+     */
+    public boolean prepareDesignTransfer(Player player, EditorSession session, Inventory inv, ItemStack source) {
+        Gui gui = session.gui();
+        if (inv == null || source == null || source.getType() == Material.AIR) {
+            return false;
+        }
+        if (!hasDesignRoom(gui, inv, source)) {
+            player.sendMessage(lang.msg("editor.design.noSpace"));
+            return false;
+        }
+        releaseEmptyPanes(gui, inv, null);
+        return true;
+    }
+
+    /** true, если в дизайн-слоты можно положить хотя бы часть предмета. */
+    private boolean hasDesignRoom(Gui gui, Inventory inv, ItemStack source) {
+        int max = Math.max(1, source.getMaxStackSize());
+        for (int i = 0; i < gui.slots() && i < inv.getSize(); i++) {
+            if (gui.slotType(i) != SlotType.DESIGN) {
+                continue;
             }
+            ItemStack current = inv.getItem(i);
+            if (current == null || current.getType() == Material.AIR || isPlaceholderItem(current)) {
+                return true;
+            }
+            if (current.isSimilar(source)
+                    && current.getAmount() < Math.min(max, Math.max(1, current.getMaxStackSize()))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Снимает панели «Пусто»: для ванильного переноса (shift-клик/драг)
+     * такой слот «занят», и предмет туда не попадёт. Панели вернёт
+     * {@link #captureDesign} на следующем тике.
+     *
+     * @param slots слоты верхнего инвентаря (null — все дизайн-слоты)
+     */
+    public void releaseEmptyPanes(Gui gui, Inventory inv, List<Integer> slots) {
+        if (gui == null || inv == null) {
+            return;
+        }
+        for (int i = 0; i < gui.slots() && i < inv.getSize(); i++) {
+            if (gui.slotType(i) != SlotType.DESIGN || (slots != null && !slots.contains(i))) {
+                continue;
+            }
+            releasePane(inv, i);
+        }
+    }
+
+    /**
+     * Освобождает слот от служебной панели («Пусто» / «Заблокировано»),
+     * чтобы ваниль видела слот свободным. Предметы игрока не трогает.
+     */
+    public void releasePane(Inventory inv, int slot) {
+        if (inv == null || slot < 0 || slot >= inv.getSize()) {
+            return;
+        }
+        ItemStack current = inv.getItem(slot);
+        if (current != null && isScreenPane(current)) {
+            inv.setItem(slot, null);
         }
     }
 
     /** true, если предмет — служебная панель-заглушка пустого дизайн-слота. */
     public boolean isPlaceholderItem(ItemStack item) {
         return isPlaceholder(item);
+    }
+
+    /** true, если предмет — любая служебная панель экрана DESIGN. */
+    public boolean isScreenPane(ItemStack item) {
+        return isPlaceholderItem(item) || isLockedItem(item);
+    }
+
+    /** true, если предмет — панель заблокированного (скелетного) слота. */
+    private boolean isLockedItem(ItemStack item) {
+        if (item == null) {
+            return false;
+        }
+        ItemMeta meta = item.getItemMeta();
+        return meta != null && meta.hasDisplayName()
+                && legacy(lang.raw("editor.design.locked")).equals(meta.displayName());
+    }
+
+    /** Панель-заглушка пустого дизайн-слота (её нельзя забрать, но можно заменить). */
+    private ItemStack emptyPane() {
+        return item(Material.LIME_STAINED_GLASS_PANE, lang.raw("editor.design.empty"));
+    }
+
+    /** Панель служебного слота скелета (внешний вид подсказки «заблокировано»). */
+    private ItemStack lockedPane() {
+        return item(Material.BLACK_STAINED_GLASS_PANE, lang.raw("editor.design.locked"));
+    }
+
+    /** Возвращает предмет в инвентарь игрока; переполнение падает под ноги. */
+    private void giveBack(Player player, ItemStack item) {
+        if (item == null || item.getType() == Material.AIR || item.getAmount() <= 0) {
+            return;
+        }
+        for (ItemStack rest : player.getInventory().addItem(item).values()) {
+            if (rest != null && rest.getType() != Material.AIR && rest.getAmount() > 0) {
+                player.getWorld().dropItemNaturally(player.getLocation(), rest);
+            }
+        }
     }
 
     /** Сбрасывает чат-промпт по таймауту (5 минут), если игрок так ничего и не ввёл. */
@@ -328,7 +457,7 @@ public class EditorManager {
         gui.setDesignAt(slot, "");
         Inventory inv = currentEditorInventory(player, session, EditorHolder.Screen.DESIGN);
         if (inv != null) {
-            inv.setItem(slot, item(Material.LIME_STAINED_GLASS_PANE, lang.raw("editor.design.empty")));
+            inv.setItem(slot, emptyPane());
         }
         registry.save(gui);
     }
@@ -405,6 +534,9 @@ public class EditorManager {
     }
 
     private boolean isPlaceholder(ItemStack item) {
+        if (item == null) {
+            return false; // панель могли снять перед ванильным переносом
+        }
         ItemMeta meta = item.getItemMeta();
         return meta != null && meta.hasDisplayName()
                 && legacy(lang.raw("editor.design.empty")).equals(meta.displayName());
