@@ -71,6 +71,7 @@ public final class FunctionalBlock {
         private OnItemChanged onItemChanged;
         private OnClose onClose;
         private OnTick onTick;
+        private OnBlockTick onBlockTick;
         private CraftingRecipe recipe;
         private Map<Integer, Integer> fuelConsumption;
 
@@ -110,6 +111,16 @@ public final class FunctionalBlock {
          */
         public Builder onItemChanged(OnItemChanged callback) {
             this.onItemChanged = callback;
+            return this;
+        }
+
+        /**
+         * Серверный колбэк «работающего» блока: тикает каждые 5 тиков,
+         * пока включена {@code CustomGuiAPI.setWorking(block, true)} —
+         * даже когда GUI закрыт (варка без зрителей).
+         */
+        public Builder onBlockTick(OnBlockTick callback) {
+            this.onBlockTick = callback;
             return this;
         }
 
@@ -163,7 +174,7 @@ public final class FunctionalBlock {
                 throw new IllegalStateException("gui(...) is required for block '" + blockId + "'");
             }
             return new HandlerImpl(guiName, canOpen, onOpen, onClick, onItemChanged,
-                    onClose, onTick, recipe, fuelConsumption);
+                    onClose, onTick, onBlockTick, recipe, fuelConsumption);
         }
 
         // ================= колбэки =================
@@ -185,6 +196,14 @@ public final class FunctionalBlock {
         public interface OnItemChanged {
             void onItemChanged(Player player, Location block, int slot, SlotType type,
                                ItemStack oldItem, ItemStack newItem);
+        }
+
+        /**
+         * Серверный тик «работающего» блока (каждые 5 тиков, без зрителей).
+         */
+        @FunctionalInterface
+        public interface OnBlockTick {
+            void onBlockTick(Location block, FunctionalBlockData data);
         }
 
         /** Колбэк закрытия. */
@@ -210,12 +229,13 @@ public final class FunctionalBlock {
         private final Builder.OnItemChanged onItemChanged;
         private final Builder.OnClose onClose;
         private final Builder.OnTick onTick;
+        private final Builder.OnBlockTick onBlockTick;
         private final CraftingRecipe recipe;
         private final Map<Integer, Integer> fuelConsumption;
 
         HandlerImpl(String guiName, BiPredicate<Player, Location> canOpen,
                     Builder.OnOpen onOpen, Builder.OnClick onClick, Builder.OnItemChanged onItemChanged,
-                    Builder.OnClose onClose, Builder.OnTick onTick,
+                    Builder.OnClose onClose, Builder.OnTick onTick, Builder.OnBlockTick onBlockTick,
                     CraftingRecipe recipe, Map<Integer, Integer> fuelConsumption) {
             this.guiName = guiName;
             this.canOpen = canOpen;
@@ -224,6 +244,7 @@ public final class FunctionalBlock {
             this.onItemChanged = onItemChanged;
             this.onClose = onClose;
             this.onTick = onTick;
+            this.onBlockTick = onBlockTick;
             this.recipe = recipe;
             this.fuelConsumption = fuelConsumption == null
                     ? Collections.emptyMap()
@@ -273,6 +294,13 @@ public final class FunctionalBlock {
         public void onTick(Location block, Inventory inv) {
             if (onTick != null) {
                 onTick.onTick(block, inv);
+            }
+        }
+
+        @Override
+        public void onBlockTick(Location block, FunctionalBlockData data) {
+            if (onBlockTick != null) {
+                onBlockTick.onBlockTick(block, data);
             }
         }
 

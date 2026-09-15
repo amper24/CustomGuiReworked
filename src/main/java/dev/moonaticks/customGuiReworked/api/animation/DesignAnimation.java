@@ -100,6 +100,32 @@ public final class DesignAnimation {
         return new Builder();
     }
 
+    /**
+     * Индекс кадра (0-based) для «стрелки прогресса»: сколько из
+     * {@code stages} кадров показывать при текущем прогрессе.
+     *
+     * <p>Прогресс 0 → 0-й кадр; прогресс {@code total} → последний кадр.
+     * Кадры — любые предметы (ванильные и кастомные CraftEngine):
+     * <pre>{@code
+     * List<ItemStack> arrow = List.of(arrow1, arrow2, arrow3, arrow4);
+     * int stage = DesignAnimation.stageForProgress(cook, total, arrow.size());
+     * CustomGuiAPI.setLocalDesign(viewer, 5, arrow.get(stage));
+     * }</pre>
+     *
+     * @param progress текущий прогресс (≥0)
+     * @param total    полный прогресс (≥1)
+     * @param stages   количество кадров (≥1)
+     * @return индекс кадра в диапазоне [0, stages-1]
+     */
+    public static int stageForProgress(int progress, int total, int stages) {
+        if (stages <= 0 || total <= 0 || progress <= 0) {
+            return 0;
+        }
+        int clamped = Math.min(progress, total);
+        int index = (int) ((long) (clamped - 1) * stages / total);
+        return Math.max(0, Math.min(stages - 1, index));
+    }
+
     // ================= запуск =================
 
     /**

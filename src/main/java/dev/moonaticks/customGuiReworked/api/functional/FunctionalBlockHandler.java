@@ -132,6 +132,37 @@ public interface FunctionalBlockHandler {
     }
 
     /**
+     * Серверный тик «работающего» блока: вызывается каждые 5 тиков,
+     * пока для блока включена работа ({@code setWorking(block, true)}),
+     * <b>независимо от того, открыт ли GUI</b> — как у ванильной печи:
+     * варка продолжается, даже когда никто не смотрит в окно.
+     *
+     * <p>Всё, что должно жить без зрителя, живёт здесь и в
+     * {@link FunctionalBlockData} (прогресс, флаги); предметы слотов
+     * читаются/пишутся через {@code getBlockSlotItem}/{@code setBlockSlotItem}
+     * (они же мгновенно перерисуют открытые GUI зрителей и вызовут
+     * {@link dev.moonaticks.customGuiReworked.api.event.GuiSlotChangedEvent}).
+     *
+     * <p>Вызов гарантирован только на основном потоке и только когда
+     * чанк блока загружен (unloaded чанки тикер пропускает).
+     * Работа переживает перезагрузку сервера (флаг персистится).
+     *
+     * <pre>{@code
+     * .onBlockTick((block, data) -> {
+     *     if (!isHeated(block)) { data.setInt("cook", 0); return; }
+     *     int cook = data.getInt("cook", 0) + 1;
+     *     if (cook >= data.getInt("total", 200)) {
+     *         data.setInt("cook", 0);
+     *         CustomGuiAPI.setBlockSlotItem(block, 24, resultItem); // готово!
+     *     } else {
+     *         data.setInt("cook", cook);
+     *     }
+     * })}</pre>
+     */
+    default void onBlockTick(Location block, FunctionalBlockData data) {
+    }
+
+    /**
      * Блок разрушен (предметы уже выброшены, GUI зрителей закрываются).
      * Хорошее место, чтобы остановить анимации и убрать состояние
      * прогресса/топлива для этой локации.

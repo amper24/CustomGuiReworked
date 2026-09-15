@@ -739,10 +739,15 @@ GUI есть заполненные CRAFT-слоты (крафт потенци�
 CRAFT изменился → проверить `matchesCraft` → крафт пошёл;
 RESULT: предмет → пусто → результат забрали, расходовать топливо и
 ингредиенты.
+**Работа без открытого GUI** (варка продолжается, когда игрок
+закрыл окно) — `onBlockTick` + `setWorking` + `blockData` +
+`setBlockSlotItem`; полный пример котла — раздел 17.
+
 
 При разрушении блока: открытые GUI закрываются, локальные оверрайды
-зрителей очищаются, сохранённые предметы выпадают, вызывается
-`onBlockBroken(block)`, per-блок анимации останавлируются.
+зрителей очищаются, сохранённые предметы, данные блока и флаг
+«работает» удаляются, вызывается `onBlockBroken(block)`,
+per-блок анимации останавливаются.
 
 ---
 
@@ -773,3 +778,127 @@ flame.stop();                              // всё
 `stop()`.
 
 ---
+
+## 17. Работа блока без открытого GUI (котёл/печь варят без зрителя)
+
+Ключевая идея «умных» блоков (котёл, печь, генератор): **состояние и
+работа живут на стороне блока, а не в GUI**. Игрок закрыл окно — варка
+продолжается; открыл — видит актуальный результат. Для этого:
+
+| Что | API |
+|---|---|
+| Числа/флаги блока (прогресс, рецепта, «готово») | `CustomGuiAPI.blockData(block)` / `blockData(blockId, block)` — `FunctionalBlockData`, персистентный KV, живёт без GUI и переживает рестарт |
+| Включить/выключить серверную работу | `CustomGuiAPI.setWorking(block, true/false)`, `isWorking(block)` |
+| Серверный тик работающего блока | `.onBlockTick((block, data) -> ...)` в builder — каждые 5 тиков **без зрителей** (unloaded чанки пропускаются) |
+| Чтение/запись предметов слотов при закрытом GUI | `CustomGuiAPI.getBlockSlotItem(block, slot)`, `setBlockSlotItem(block, slot, item)` (зрители мгновенно перерисуются + `GuiSlotChangedEvent`), `consumeBlockSlotItem(block, slot, amount)` |
+| Стрелка/кадры прогресса | `DesignAnimation.stageForProgress(cook, total, frames.size())` + `setLocalDesign` (ванильные и кастомные предметы) или `DesignAnimation` для авто-цикла |
+| Зрители | `CustomGuiAPI.getViewers(block)` (уже был) |
+
+Всё это работает поверх стандартного функционального блока (раздел 15):
+`onOpen/onTick/onItemChanged` по-прежнему доступны.
+
+### Пример: котёл (в духе FarmersDelight)
+
+GUI `cooking_pot` (27 слотов): CRAFT 1,2,3,10,11,12 (ингредиенты),
+RESULT 7 (блюдо), CONTAINER 22 (миска), RESULT 24 (готовое), DESIGN 5
+(стрелка), DESIGN 20 (огонь).
+
+```java
+// onEnable:
+FunctionalBlock.builder("farmersdelight:cooking_pot")
+    .gui("cooking_pot")
+    .onOpen((player, block, inv) -> paintNow(block, player))  // отрисовать текущее состояние
+    .onTick((block, inv) -> {                                 // per-зритель, каждые 5 тиков
+        for (Player v : CustomGuiAPI.getViewers(block)) {
+            paintNow(block, v);
+        }
+    })
+    .onItemChanged((player, block, slot, type, oldItem, newItem) -> {
+        // заложили/убрали ингредиент — пере-оценить, пора ли варить
+        if (type == SlotType.CRAFT) {
+            CustomGuiAPI.setWorking(block, evaluateCookable(block));
+        }
+        if (type == SlotType.RESULT && oldItem != null && newItem == null
+                && slot == 24) {
+            // результат забрали: опыт + пере-оценка
+            player.giveExp(Math.max(1, Math.round(
+                    CustomGuiAPI.blockData(block).getDouble("xp", 0)));
+            CustomGuiAPI.setWorking(block, evaluateCookable(block));
+        }
+    })
+    .onBlockTick((block, data) -> {                            // серверная варка, БЕЗ зрителя
+        if (!isHeated(block)) {                                // печь/костёр/магма снизу — своя логика
+            data.setInt("cook", 0);
+            return;
+        }
+        Object[] recipe = findRecipe(block);                   // своя таблица рецептов
+        if (recipe == null) {
+            data.setInt("cook", 0);
+            return;
+        }
+        int cook = data.getInt("cook", 0) + 1;
+        int total = (int) recipe[5];
+        if (cook >= total) {
+            data.setInt("cook", 0);
+            data.setDouble("xp", (double) recipe[6]);
+            consumeIngredients(block, recipe);                 // через consumeBlockSlotItem
+            boolean toBowl = hasContainerRecipe(recipe);
+            if (toBowl) {
+                mergeIntoMeal(block, recipe);                  // setBlockSlotItem(7, dish)
+            } else {
+                CustomGuiAPI.setBlockSlotItem(block, 24, makeItem(recipe[3], (int) recipe[4]));
+            }
+        } else {
+            data.setInt("cook", cook);
+        }
+    })
+    .register();
+
+// отрисовка: стрелка прогресса + огонь (ванильные и кастомные предметы — без разницы)
+List<ItemStack> arrow = List.of(arrow1, arrow2, arrow3, arrow4); // CE-предметы
+void paintNow(Location block, Player viewer) {
+    FunctionalBlockData data = CustomGuiAPI.blockData(block);
+    int cook = data.getInt("cook", 0);
+    int total = data.getInt("total", 1);
+    if (cook > 0 && total > 0) {
+        int stage = DesignAnimation.stageForProgress(cook, total, arrow.size());
+        CustomGuiAPI.setLocalDesign(viewer, 5, arrow.get(stage));
+    } else {
+        CustomGuiAPI.setLocalDesign(viewer, 5, null);
+    }
+    CustomGuiAPI.setLocalDesign(viewer, 20, isHeated(block) ? fireIcon : null);
+}
+```
+
+Как это складывается:
+
+- **Зритель открыл GUI** → обычные предметы слотов (CRAFT/CONTAINER/RESULT)
+  подгружаются из персистентного хранилища блока; `onOpen`/`onTick`
+  рисуют стрелку и огонь через `setLocalDesign` (локальный оверрайд —
+  не трогает файл GUI, других зрителей и сохранённые предметы не касаются);
+- **игрок закрыл GUI** → `onBlockTick` продолжает тикать: прогресс
+  копится в `blockData`, результат появляется через
+  `setBlockSlotItem` и сохраняется;
+- **результат готов, зритель смотрит** → `setBlockSlotItem`
+  мгновенно перерисовывает его инвентарь и вызывает
+  `GuiSlotChangedEvent` (old=null → new=result) — `onItemChanged`/
+  слушатель узнают, что «результат появился»;
+- **перезагрузка сервера** → данные и флаг «работает»
+  восстанавливаются из `data/functional/<blockId>.yml` — варка
+  продолжается с того же места;
+- **блок разбили** → предметы выпадают, данные и работа удаляются,
+  `onBlockBroken` вызывается (остановить анимации и прочее).
+
+Примечания:
+
+- `setWorking(block, ...)` с `Location` находит ID блока через
+  CraftEngine; если ID известен явно — `setWorking(blockId, block, ...)`
+  (быстрее, без CE-обращения).
+- `onBlockTick` вызывается только для загруженных чанков;
+  `isHeated`-подобные проверки делайте в своём коде (Lightable/CE-state).
+- Кадры стрелки — любые `ItemStack` (ванильные `Material` и кастомные
+  CraftEngine/ItemsAdder предметы), `setLocalDesign` не различает.
+- Если анимация «время-зависимая» (пламя, пузыри), а не прогресс —
+  используйте `DesignAnimation` (раздел 16) в `onOpen`:
+  `startForBlock(block)` перерисует всех зрителей, `stopForBlock` —
+  в `onClose`.

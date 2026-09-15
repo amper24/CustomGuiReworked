@@ -547,6 +547,38 @@ public class GuiOpener {
     }
 
     /**
+     * Серверное изменение слота (напр., «работа» блока без зрителей —
+     * {@code setBlockSlotItem}): применяет предмет к живому инвентарю
+     * сессии, обновляет baseline и вызывает {@link GuiSlotChangedEvent}.
+     *
+     * <p>Вызывается для отслеживаемых слотов (CONTAINER/CRAFT/FUEL/RESULT)
+     * с уже записанным в хранилище предметом.
+     */
+    public void applyRemoteChange(GuiHolder holder, int slot, ItemStack item) {
+        Gui gui = holder.gui();
+        if (slot < 0 || slot >= gui.slots() || !GuiHolder.isTracked(gui.slotType(slot))) {
+            return;
+        }
+        Inventory inventory = holder.getInventory();
+        String[] baseline = holder.baseline();
+        if (inventory == null || baseline == null || slot >= baseline.length) {
+            return;
+        }
+        if (item == null || item.getType() == Material.AIR) {
+            inventory.setItem(slot, null);
+        } else {
+            inventory.setItem(slot, item.clone());
+        }
+        String before = baseline[slot];
+        String after = Codecs.encode(inventory.getItem(slot));
+        if (java.util.Objects.equals(after, before == null ? "" : before)) {
+            return; // ничего не изменилось
+        }
+        baseline[slot] = after;
+        fireSlotChanged(holder, gui, inventory, slot, before, after);
+    }
+
+    /**
      * Вызывает {@link GuiSlotChangedEvent} для изменившегося слота.
      * Предметы «было/стало» восстанавливаются из baseline/текущего
      * содержимого (null — пустой слот).

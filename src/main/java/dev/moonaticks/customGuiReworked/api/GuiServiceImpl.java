@@ -3,6 +3,7 @@ package dev.moonaticks.customGuiReworked.api;
 import dev.moonaticks.customGuiReworked.CustomGuiReworked;
 import dev.moonaticks.customGuiReworked.codec.Codecs;
 import dev.moonaticks.customGuiReworked.api.functional.CraftingRecipe;
+import dev.moonaticks.customGuiReworked.api.functional.FunctionalBlockData;
 import dev.moonaticks.customGuiReworked.api.functional.FunctionalBlockRegistry;
 import dev.moonaticks.customGuiReworked.gui.GuiHolder;
 import dev.moonaticks.customGuiReworked.gui.GuiOpener;
@@ -466,6 +467,113 @@ public class GuiServiceImpl implements GuiService {
     @Override
     public FunctionalBlockRegistry getFunctionalBlocks() {
         return plugin.functionalBlocks();
+    }
+
+    /** GUI, привязанный к кастомному блоку по его локации (через CraftEngine). */
+    private Gui guiOfBlock(Location block) {
+        if (block == null || block.getWorld() == null) {
+            return null;
+        }
+        String blockId = FunctionalBlockRegistry.resolveCustomBlockId(block);
+        if (blockId == null) {
+            return null;
+        }
+        return plugin.registry().getByBlockId(blockId);
+    }
+
+    @Override
+    public ItemStack getBlockSlotItem(Location block, int slot) {
+        Gui gui = guiOfBlock(block);
+        if (gui == null || slot < 0 || slot >= gui.slots()
+                || !GuiHolder.isTracked(gui.slotType(slot))) {
+            return null;
+        }
+        StorageKey key = StorageKey.forBlock(block, gui.fileName());
+        String[] stored = plugin.storage().load(key);
+        if (stored == null || slot >= stored.length) {
+            return null;
+        }
+        return Codecs.decode(stored[slot]);
+    }
+
+    @Override
+    public boolean setBlockSlotItem(Location block, int slot, ItemStack item) {
+        Gui gui = guiOfBlock(block);
+        if (gui == null || slot < 0 || slot >= gui.slots()
+                || !GuiHolder.isTracked(gui.slotType(slot))) {
+            return false;
+        }
+        StorageKey key = StorageKey.forBlock(block, gui.fileName());
+        plugin.storage().updateSlot(key, slot, Codecs.encode(item));
+        // Открытые зрители: перерисовать слот + GuiSlotChangedEvent.
+        String owner = key.owner();
+        for (Player viewer : GuiOpener.getViewers(block)) {
+            Inventory top = viewer.getOpenInventory().getTopInventory();
+            if (top.getHolder() instanceof GuiHolder holder
+                    && holder.key().type() == StorageType.BLOCK
+                    && owner.equals(holder.key().owner())) {
+                plugin.opener().applyRemoteChange(holder, slot, item);
+            }
+        }
+        return true;
+    }
+
+    @Override
+    public int consumeBlockSlotItem(Location block, int slot, int amount) {
+        if (amount <= 0) {
+            return 0;
+        }
+        ItemStack current = getBlockSlotItem(block, slot);
+        if (current == null) {
+            return 0;
+        }
+        int take = Math.min(amount, current.getAmount());
+        if (take >= current.getAmount()) {
+            setBlockSlotItem(block, slot, null);
+        } else {
+            current.setAmount(current.getAmount() - take);
+            setBlockSlotItem(block, slot, current);
+        }
+        return take;
+    }
+
+    @Override
+    public FunctionalBlockData blockData(String blockId, Location block) {
+        return plugin.functionalBlocks().data(blockId, block);
+    }
+
+    @Override
+    public FunctionalBlockData blockData(Location block) {
+        if (block == null || block.getWorld() == null) {
+            return null;
+        }
+        String blockId = FunctionalBlockRegistry.resolveCustomBlockId(block);
+        return blockId == null ? null : plugin.functionalBlocks().data(blockId, block);
+    }
+
+    @Override
+    public void setWorking(String blockId, Location block, boolean working) {
+        plugin.functionalBlocks().setWorking(blockId, block, working);
+    }
+
+    @Override
+    public void setWorking(Location block, boolean working) {
+        if (block == null || block.getWorld() == null) {
+            return;
+        }
+        String blockId = FunctionalBlockRegistry.resolveCustomBlockId(block);
+        if (blockId != null) {
+            plugin.functionalBlocks().setWorking(blockId, block, working);
+        }
+    }
+
+    @Override
+    public boolean isWorking(Location block) {
+        if (block == null || block.getWorld() == null) {
+            return false;
+        }
+        String blockId = FunctionalBlockRegistry.resolveCustomBlockId(block);
+        return blockId != null && plugin.functionalBlocks().isWorking(blockId, block);
     }
 
     private StorageKey keyOf(StorageType type, String owner, String table) {

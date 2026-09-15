@@ -114,8 +114,10 @@ public final class CustomGuiReworked extends JavaPlugin {
         hookManager.init(dispatcher);
 
         // Функциональные блоки: реестр обработчиков + тикер onTick
-        // (каждые 5 тиков — анимации прогресса, крафты, топливо).
+        // (каждые 5 тиков — анимации прогресса, крафты, топливо) +
+        // данные блоков (data/functional) с восстановлением «работы».
         functionalBlocks = new FunctionalBlockRegistry(this);
+        functionalBlocks.loadData(new File(getDataFolder(), "data/functional"));
         functionalTickTask = new BukkitRunnable() {
             @Override
             public void run() {
@@ -166,6 +168,9 @@ public final class CustomGuiReworked extends JavaPlugin {
         // возвращаются/дропаются предметы. Иначе после выключения листенеры
         // сняты, а меню остаётся открытым — риск дюпа предметов.
         closeOpenMenus();
+        if (functionalBlocks != null) {
+            functionalBlocks.saveData();
+        }
         if (storage != null) {
             storage.stopAutosave();
             storage.flushAll();

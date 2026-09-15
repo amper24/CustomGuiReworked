@@ -18,6 +18,7 @@ import dev.moonaticks.customGuiReworked.storage.StorageKey;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
+import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.EquipmentSlot;
@@ -203,8 +204,14 @@ public class BlockHookDispatcher {
 
     /**
      * Тик функциональных блоков (вызывается плагином каждые
-     * {@link #FUNCTIONAL_TICK_INTERVAL} тиков): {@code onTick} для всех
-     * открытых сессий каждого обработчика.
+     * {@link #FUNCTIONAL_TICK_INTERVAL} тиков):
+     * <ol>
+     *   <li>{@code onTick} для всех открытых сессий каждого обработчика
+     *       (per-зритель: анимации, прогресс в окне);</li>
+     *   <li>{@code onBlockTick} для всех «работающих» блоков —
+     *       серверная логика (варка/генерация) идёт, даже когда GUI закрыт;</li>
+     *   <li>периодическое сохранение данных блоков.</li>
+     * </ol>
      */
     public void tickFunctionalBlocks() {
         List<FunctionalBlockHandler> handlers = plugin.functionalBlocks().getHandlers();
@@ -241,6 +248,41 @@ public class BlockHookDispatcher {
                     }
                 }
             }
+        }
+
+        // «Рабочие» блоки: серверная логика идёт без зрителей
+        // (варка/генерация продолжается, когда GUI закрыт).
+        FunctionalBlockRegistry registry = plugin.functionalBlocks();
+        for (Map.Entry<String, Set<String>> entry : registry.workingEntries().entrySet()) {
+            FunctionalBlockHandler handler = registry.getHandler(entry.getKey());
+            if (handler == null) {
+                continue;
+            }
+            for (String owner : entry.getValue()) {
+                Location location = StorageKey.blockLocation(owner);
+                if (location == null || location.getWorld() == null) {
+                    continue;
+                }
+                // Unloaded чанки пропускаем: блоку, которого «нет»,
+                // работу продолжать рано.
+                World world = location.getWorld();
+                if (!world.isChunkLoaded(location.getBlockX() >> 4, location.getBlockZ() >> 4)) {
+                    continue;
+                }
+                try {
+                    handler.onBlockTick(location, registry.data(entry.getKey(), location));
+                } catch (Exception e) {
+                    plugin.getLogger().warning("FunctionalBlockHandler.onBlockTick('"
+                            + handler.getGuiName() + "') failed at " + owner + ": " + e.getMessage());
+                }
+            }
+        }
+
+        // Периодическое сохранение данных блоков.
+        try {
+            registry.tickDataSave();
+        } catch (Exception e) {
+            plugin.getLogger().warning("Functional block data save failed: " + e.getMessage());
         }
     }
 
@@ -321,9 +363,11 @@ public class BlockHookDispatcher {
             }
         }
 
-        // 4. Удаление данных и кэша.
+        // 4. Удаление данных и кэша (включая данные/рабочий флаг
+        //    функциональных блоков — состояние умирает с блоком).
         plugin.storage().blockBackend().removeBlock(location);
         plugin.storage().removeBlockCache(owner);
+        plugin.functionalBlocks().removeBlockData(location);
         openBlockKeys.values().removeIf(owner::equals);
         destroyed.remove(owner);
         plugin.getLogger().info("Custom block broken at " + owner + " — " + payloads.size() + " stored item(s) dropped");

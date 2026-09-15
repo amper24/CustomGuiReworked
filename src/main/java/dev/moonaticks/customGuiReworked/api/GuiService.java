@@ -1,6 +1,7 @@
 package dev.moonaticks.customGuiReworked.api;
 
 import dev.moonaticks.customGuiReworked.api.functional.CraftingRecipe;
+import dev.moonaticks.customGuiReworked.api.functional.FunctionalBlockData;
 import dev.moonaticks.customGuiReworked.api.functional.FunctionalBlockRegistry;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
@@ -288,4 +289,71 @@ public interface GuiService {
      * или {@code CustomGuiAPI.functionalBlock(String)}.
      */
     FunctionalBlockRegistry getFunctionalBlocks();
+
+    /**
+     * Предмет из персистентного слота блока (CRAFT/FUEL/CONTAINER/RESULT)
+     * — работает <b>даже когда GUI закрыт</b> (читает хранилище).
+     *
+     * @return предмет либо null (пустой слот / блок не функциональный /
+     *         слот не отслеживаемый)
+     */
+    ItemStack getBlockSlotItem(Location block, int slot);
+
+    /**
+     * Записывает предмет в персистентный слот блока, когда GUI может быть
+     * закрыт: данные уходят в хранилище, а у открытых зрителей
+     * инвентарь перерисовывается и вызывается
+     * {@link dev.moonaticks.customGuiReworked.api.event.GuiSlotChangedEvent}
+     * (oldItem = прежнее содержимое).
+     *
+     * <p>Типичное применение — результат, готовый без зрителя:
+     * {@code setBlockSlotItem(block, 24, new ItemStack(Material.IRON_INGOT))}.
+     *
+     * @param item null/AIR — слот очищается
+     * @return false, если блок не функциональный, GUI не найден
+     *         или слот не отслеживаемый (DESIGN)
+     */
+    boolean setBlockSlotItem(Location block, int slot, ItemStack item);
+
+    /**
+     * Снимает {@code amount} предметов из слота блока (null, когда GUI
+     * закрыт); последние предметы слот очищают.
+     *
+     * @return сколько предметов снято (0 — слот пуст / не функциональный)
+     */
+    int consumeBlockSlotItem(Location block, int slot, int amount);
+
+    /**
+     * Персистентные данные блока (прогресс/флаги/произвольные значения) —
+     * см. {@link FunctionalBlockData}. Живут без GUI и переживают
+     * перезагрузку сервера.
+     *
+     * @param blockId ID блока, зарегистрированного как функциональный
+     * @return данные либо null (blockId не зарегистрирован)
+     */
+    FunctionalBlockData blockData(String blockId, Location block);
+
+    /**
+     * То же, что {@link #blockData(String, Location)}, но ID блока
+     * определяется по локации через CraftEngine.
+     */
+    FunctionalBlockData blockData(Location block);
+
+    /**
+     * Включает/выключает «работу» блока (см.
+     * {@link FunctionalBlockHandler#onBlockTick}): серверная логика
+     * продолжается даже когда GUI закрыт; флаг персистится.
+     *
+     * @param blockId ID блока, зарегистрированного как функциональный
+     */
+    void setWorking(String blockId, Location block, boolean working);
+
+    /**
+     * То же, что {@link #setWorking(String, Location, boolean)}, но ID
+     * блока определяется по локации через CraftEngine.
+     */
+    void setWorking(Location block, boolean working);
+
+    /** true, если для блока включена «работа» (onBlockTick тикает). */
+    boolean isWorking(Location block);
 }

@@ -2,6 +2,7 @@ package dev.moonaticks.customGuiReworked.api;
 
 import dev.moonaticks.customGuiReworked.api.functional.CraftingRecipe;
 import dev.moonaticks.customGuiReworked.api.functional.FunctionalBlock;
+import dev.moonaticks.customGuiReworked.api.functional.FunctionalBlockData;
 import dev.moonaticks.customGuiReworked.api.functional.FunctionalBlockRegistry;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
@@ -315,5 +316,59 @@ public final class CustomGuiAPI {
      */
     public static FunctionalBlock.Builder functionalBlock(String blockId) {
         return FunctionalBlock.builder(blockId);
+    }
+
+    // ================= работа блока без открытого GUI =================
+
+    /**
+     * Предмет из персистентного слота блока (работает, даже когда GUI закрыт).
+     *
+     * @return предмет либо null
+     */
+    public static ItemStack getBlockSlotItem(Location block, int slot) {
+        return service().getBlockSlotItem(block, slot);
+    }
+
+    /**
+     * Записать предмет в персистентный слот блока (GUI может быть закрыт);
+     * открытые зрители перерисуются, вызовется {@code GuiSlotChangedEvent}.
+     *
+     * @param item null — слот очистить
+     * @return false — блок не функциональный / слот не отслеживаемый
+     */
+    public static boolean setBlockSlotItem(Location block, int slot, ItemStack item) {
+        return service().setBlockSlotItem(block, slot, item);
+    }
+
+    /** Снять до {@code amount} предметов из слота блока (0 — слот пуст). */
+    public static int consumeBlockSlotItem(Location block, int slot, int amount) {
+        return service().consumeBlockSlotItem(block, slot, amount);
+    }
+
+    /**
+     * Персистентные данные блока (прогресс/флаги) по ID функционального блока.
+     */
+    public static FunctionalBlockData blockData(String blockId, Location block) {
+        return service().blockData(blockId, block);
+    }
+
+    /** То же, что {@link #blockData(String, Location)}, ID — через CraftEngine. */
+    public static FunctionalBlockData blockData(Location block) {
+        return service().blockData(block);
+    }
+
+    /** Включить/выключить «работу» блока (onBlockTick, без зрителей). */
+    public static void setWorking(String blockId, Location block, boolean working) {
+        service().setWorking(blockId, block, working);
+    }
+
+    /** То же, что {@link #setWorking(String, Location, boolean)}, ID — через CraftEngine. */
+    public static void setWorking(Location block, boolean working) {
+        service().setWorking(block, working);
+    }
+
+    /** true, если для блока включена «работа». */
+    public static boolean isWorking(Location block) {
+        return service().isWorking(block);
     }
 }
