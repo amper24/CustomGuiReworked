@@ -332,7 +332,8 @@ public class GuiServiceImpl implements GuiService {
 
     @Override
     public void setLocalTitle(Player player, Location block, String title) {
-        if (!blockHolder(player, block) instanceof GuiHolder holder) {
+        GuiHolder holder = blockHolder(player, block);
+        if (holder == null) {
             return;
         }
         holder.setLocalTitle(title);

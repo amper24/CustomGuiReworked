@@ -181,10 +181,10 @@ public final class DesignAnimation {
     // ================= внутренние хуки (авто-стоп) =================
 
     /**
-     * Вызывается плагинном при закрытии GUI-инвентаря: пер-плеер сессия
-     * этого инвентаря закрывается.
+     * Внутренний хук плагина: вызывается при закрытии GUI-инвентаря —
+     * пер-плеер сессия этого инвентаря закрывается.
      */
-    static void onInventoryClosed(Inventory inventory) {
+    public static void onInventoryClosed(Inventory inventory) {
         if (inventory == null) {
             return;
         }
@@ -194,10 +194,10 @@ public final class DesignAnimation {
     }
 
     /**
-     * Вызывается плагином при разрушении блока: per-блок анимации
-     * для этой локации останавливаются.
+     * Внутренний хук плагина: вызывается при разрушении блока —
+     * per-блок анимации для этой локации останавливаются.
      */
-    static void onBlockBroken(Location location) {
+    public static void onBlockBroken(Location location) {
         if (location == null || location.getWorld() == null) {
             return;
         }
