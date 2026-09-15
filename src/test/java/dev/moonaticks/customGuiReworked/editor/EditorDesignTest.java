@@ -109,8 +109,11 @@ class EditorDesignTest {
     @Test
     void releasePaneTouchesOnlyServicePanes() {
         Inventory inv = inventory(9);
-        when(inv.getItem(0)).thenReturn(pane(Material.BLACK_STAINED_GLASS_PANE, LOCKED_NAME));
-        when(inv.getItem(1)).thenReturn(stack(Material.DIAMOND, 1));
+        // предметы готовим заранее: вложенные моки внутри when() Mockito не любит
+        ItemStack locked = pane(Material.BLACK_STAINED_GLASS_PANE, LOCKED_NAME);
+        ItemStack design = stack(Material.DIAMOND, 1);
+        when(inv.getItem(0)).thenReturn(locked);
+        when(inv.getItem(1)).thenReturn(design);
 
         editor.releasePane(inv, 0);
         editor.releasePane(inv, 1); // предмет дизайна/игрока не трогаем
@@ -168,8 +171,10 @@ class EditorDesignTest {
     void prepareDesignTransferReleasesPanesWhenThereIsRoom() {
         Gui gui = new Gui("test");
         Inventory inv = inventory(gui.slots());
-        when(inv.getItem(0)).thenReturn(pane(Material.LIME_STAINED_GLASS_PANE, EMPTY_NAME));
-        when(inv.getItem(1)).thenReturn(stack(Material.DIAMOND, 1));
+        ItemStack empty = pane(Material.LIME_STAINED_GLASS_PANE, EMPTY_NAME);
+        ItemStack design = stack(Material.DIAMOND, 1);
+        when(inv.getItem(0)).thenReturn(empty);
+        when(inv.getItem(1)).thenReturn(design);
 
         assertTrue(editor.prepareDesignTransfer(player, session(gui), inv, stack(Material.STONE, 4)));
 
