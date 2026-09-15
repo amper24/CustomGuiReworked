@@ -177,6 +177,7 @@ class BlockSlotAccessTest {
         java.util.Map<Integer, ItemStack> backing = new java.util.HashMap<>();
         backing.put(24, oldItem);
         Inventory top = mock(Inventory.class);
+        when(top.getHolder()).thenReturn(holder);
         when(top.getItem(org.mockito.ArgumentMatchers.anyInt()))
                 .thenAnswer(inv -> backing.get(inv.getArgument(0)));
         org.mockito.Mockito.doAnswer(inv -> {

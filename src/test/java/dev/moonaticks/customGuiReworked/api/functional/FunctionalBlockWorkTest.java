@@ -1,6 +1,7 @@
 package dev.moonaticks.customGuiReworked.api.functional;
 
 import dev.moonaticks.customGuiReworked.CustomGuiReworked;
+import dev.moonaticks.customGuiReworked.gui.GuiRegistry;
 import dev.moonaticks.customGuiReworked.integration.BlockHookDispatcher;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
@@ -47,6 +48,7 @@ class FunctionalBlockWorkTest {
         block = new Location(world, 1, 2, 3);
         plugin = mock(CustomGuiReworked.class);
         when(plugin.getLogger()).thenReturn(Logger.getLogger("test-functional"));
+        when(plugin.registry()).thenReturn(mock(GuiRegistry.class));
         registry = new FunctionalBlockRegistry(plugin);
         when(plugin.functionalBlocks()).thenReturn(registry);
         FunctionalBlock.Builder builder =
