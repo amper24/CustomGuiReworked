@@ -51,7 +51,19 @@ jobs:
           set -x
           ls -la
           if [ -f build.log ]; then
-            tail -c 28000 build.log > tail.log
+            {
+              echo "## Failing tests (context)"
+              grep -nE "FAILED$|tests? completed" build.log || true
+              echo
+              echo "## Failure details (5 lines before, 25 after each FAILED)"
+              grep -B5 -A25 "FAILED$" build.log | head -c 24000 || true
+              echo
+              echo "## Compile errors"
+              grep -nE "error:|cannot find symbol" build.log | head -50 || true
+              echo
+              echo "## Log tail"
+              tail -c 8000 build.log
+            } > tail.log
           else
             echo "build.log was NOT created" > tail.log
           fi

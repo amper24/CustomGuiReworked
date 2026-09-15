@@ -2,7 +2,7 @@
 
 Skeleton-based GUI framework для **Paper 26.2** (Java 25): визуальный in-game редактор, высокопроизводительное хранилище, интеграция кастомных блоков (ItemsAdder + CraftEngine) и готовый публичный API как библиотека.
 
-> **Версия:** `2.3.0` — см. [`build.gradle`](build.gradle) и [`gradle.properties`](gradle.properties)
+> **Версия:** `2.4.0` — см. [`build.gradle`](build.gradle) и [`gradle.properties`](gradle.properties)
 
 ---
 
@@ -37,7 +37,9 @@ Skeleton-based GUI framework для **Paper 26.2** (Java 25): визуальны
 Основная документация разбита по файлам — все ссылки относительные из корня репозитория:
 
 ### Гайды
-- **[`API.md`](API.md)** — полный гайд для разработчиков: подключение, билдер, хранилище, события, кастомные блоки, Skript/Denizen, потоковая модель.
+- **[`API.md`](API.md)** — полный гайд для разработчиков: подключение, билдер, хранилище, события, кастомные блоки, локальные оверрайды, функциональные блоки, Skript/Denizen, потоковая модель.
+- **[`EXAMPLES.md`](EXAMPLES.md)** — готовые примеры кода: от «первый GUI за 10 строк» до полного котла (варит без открытого GUI), анимации, события.
+- **[`docs/`](docs/Home.md)** — wiki-документация: [API возможности](docs/api.md), [умный блок — котёл (пошагово)](docs/smart-block.md), [Skript и Denizen](docs/scripts.md), [примеры](docs/examples.md).
 - **[`MECHANICS.md`](MECHANICS.md)** — внутренние механики: скелет слотов, shift/double-click, StorageService, кодеки, BlockHookDispatcher, EditorSession, ManagerMenu.
 
 ### Конфигурация и ресурсы
@@ -55,11 +57,19 @@ Skeleton-based GUI framework для **Paper 26.2** (Java 25): визуальны
 - **[`api/StorageType.java`](src/main/java/dev/moonaticks/customGuiReworked/api/StorageType.java)** — типы хранилища: `BLOCK`, `PERSONAL`, `GLOBAL`, `TEAM`, `TEMPORARY`.
 - **[`api/SlotCommand.java`](src/main/java/dev/moonaticks/customGuiReworked/api/SlotCommand.java)** — команда слота (`slot`, `command`, `delay`).
 - **[`api/GuiServiceImpl.java`](src/main/java/dev/moonaticks/customGuiReworked/api/GuiServiceImpl.java)** — реализация сервиса.
+- **Функциональные блоки** ([`api/functional/`](src/main/java/dev/moonaticks/customGuiReworked/api/functional/)):
+  - **`FunctionalBlock.java`** — fluent-builder «умного» блока (колбэки onOpen/onClick/onItemChanged/onTick/onBlockTick/onClose, рецепт, топливо).
+  - **`FunctionalBlockHandler.java`** — интерфейс колбэков.
+  - **`FunctionalBlockData.java`** — персистентные данные блока (KV: прогресс, флаги).
+  - **`FunctionalBlockRegistry.java`** — реестр: работа без GUI, данные, working-флаги.
+  - **`CraftingRecipe.java`** — рецепт (ингредиенты/результаты/топливо/время).
+- **Анимации** ([`api/animation/DesignAnimation.java`](src/main/java/dev/moonaticks/customGuiReworked/api/animation/DesignAnimation.java)) — кадры DESIGN/RESULT-слотов через локальные оверрайды + `stageForProgress`.
 - События:
   - **[`api/event/GuiOpenEvent.java`](src/main/java/dev/moonaticks/customGuiReworked/api/event/GuiOpenEvent.java)** — до открытия, cancellable, есть `StorageKey`.
   - **[`api/event/GuiCloseEvent.java`](src/main/java/dev/moonaticks/customGuiReworked/api/event/GuiCloseEvent.java)** — после закрытия.
   - **[`api/event/GuiSlotClickEvent.java`](src/main/java/dev/moonaticks/customGuiReworked/api/event/GuiSlotClickEvent.java)** — клик по слоту, двухуровневая отмена.
   - **[`api/event/GuiDragEvent.java`](src/main/java/dev/moonaticks/customGuiReworked/api/event/GuiDragEvent.java)** — drag по слотам.
+  - **[`api/event/GuiSlotChangedEvent.java`](src/main/java/dev/moonaticks/customGuiReworked/api/event/GuiSlotChangedEvent.java)** — содержимое слота изменилось (след. тик), предметы «было/стало».
 
 ### Внутренние модули (для понимания механик)
 - **GUI ядро:** [`gui/GuiHolder.java`](src/main/java/dev/moonaticks/customGuiReworked/gui/GuiHolder.java), [`gui/GuiOpener.java`](src/main/java/dev/moonaticks/customGuiReworked/gui/GuiOpener.java), [`gui/GuiRegistry.java`](src/main/java/dev/moonaticks/customGuiReworked/gui/GuiRegistry.java)
@@ -74,7 +84,7 @@ Skeleton-based GUI framework для **Paper 26.2** (Java 25): визуальны
 - **Denizen:** [`denizen/CguiDenizenSupport.java`](src/main/java/dev/moonaticks/customGuiReworked/denizen/CguiDenizenSupport.java), [`denizen/CguiTagBase.java`](src/main/java/dev/moonaticks/customGuiReworked/denizen/CguiTagBase.java) + events в [`denizen/events/`](src/main/java/dev/moonaticks/customGuiReworked/denizen/events/)
 
 ### Тесты
-- **[`src/test/`](src/test/java/dev/moonaticks/customGuiReworked/)** — 64+ unit-теста: `api/`, `codec/`, `storage/`, `gui/`, `editor/`, `lang/`.
+- **[`src/test/`](src/test/java/dev/moonaticks/customGuiReworked/)** — 150 unit-тестов: `api/`, `codec/`, `storage/`, `gui/`, `editor/`, `lang/`.
 
 ---
 
@@ -85,6 +95,10 @@ Skeleton-based GUI framework для **Paper 26.2** (Java 25): визуальны
 - **5 типов хранилища**: `block`, `personal`, `global`, `team`, `temporary` — см. [`StorageType.java`](src/main/java/dev/moonaticks/customGuiReworked/api/StorageType.java) и раздел [Хранилище](#хранилище).
 - **Оптимизированный движок хранения**: in-memory кэш, асинхронные коалесированные записи, диф по baseline, атомарные записи (tmp + move), autosave + гарантированный save на close/quit/stop.
 - **Кастомные блоки**: ПКМ по ItemsAdder / CraftEngine блоку открывает привязанный GUI; слом блока дропает содержимое и закрывает интерфейсы. Интеграции грузятся рефлексивно — см. [`integration/`](src/main/java/dev/moonaticks/customGuiReworked/integration/).
+- **«Умные» функциональные блоки** — builder `FunctionalBlock` (котёл/печь/верстак/генератор): крафты и топливо, **блок продолжает работать без открытого GUI** (`setWorking` + `onBlockTick`), персистентные данные блока (`blockData`), предметы слотов блока при закрытом GUI, зрители блока, стрелки прогресса — см. [`api/functional/`](src/main/java/dev/moonaticks/customGuiReworked/api/functional/) и [API.md §15–17](API.md).
+- **Локальные оверрайды (per-зритель)**: название и дизайн слотов окна подменяются только для одного игрока (стрелки, огонь, уровни жидкости) — файл GUI, другие игроки и блоки не затрагиваются — [API.md §14](API.md).
+- **`GuiSlotChangedEvent`** — «предмет положен/забран/перенесён» с фактическими предметами «было/стало» (следующий тик) — готовая точка запуска крафта.
+- **Скриптовый инструментарий без Java**: Skript (события `on cgui ...`/`cgui slot changed`, эффекты, условия, выражения) и Denizen (события, теги `<cgui...>`, изменения через `adjust`) — [API.md §10](API.md#10-skript-и-denizen) и [docs/scripts.md](docs/scripts.md).
 - **NBT на новом стандарте**: NBTAPI — optional soft-depend; без него — fallback на Paper `serializeAsBytes()` + Base64, старые данные читаются через теги `n1:` / `b2:` / `b1:` — см. [`codec/`](src/main/java/dev/moonaticks/customGuiReworked/codec/).
 - **Публичный API**: Bukkit Services + fluent builder + events — полностью описан в [`API.md`](API.md) и ниже.
 
@@ -215,8 +229,8 @@ integration:
 
 ### Подключение зависимости
 
-CustomGuiReworked публикуется через **JitPack** — он собирает jar прямо из GitHub по тегу. Файл [`jitpack.yml`](jitpack.yml) указывает JDK 25. Артефакт доступен как `com.github.amper24:CustomGuiReworked:<version>`. Версию бери из [`build.gradle`](build.gradle) `version = '2.3.0'` или из релизов GitHub. Можно указывать:
-- конкретный тег: `2.3.0`, `2.2.0`
+CustomGuiReworked публикуется через **JitPack** — он собирает jar прямо из GitHub по тегу. Файл [`jitpack.yml`](jitpack.yml) указывает JDK 25. Артефакт доступен как `com.github.amper24:CustomGuiReworked:<version>`. Версию бери из [`build.gradle`](build.gradle) `version = '2.4.0'` или из релизов GitHub. Можно указывать:
+- конкретный тег: `2.4.0`, `2.2.0`
 - короткий хеш коммита: `a1b2c3d`
 - ветку: `main-SNAPSHOT` (последний коммит main, кэшируется на 24ч)
 
@@ -255,7 +269,7 @@ dependencies {
     compileOnly("io.papermc.paper:paper-api:26.2.build.123-stable")
 
     // CustomGuiReworked — только для компиляции
-    compileOnly("com.github.amper24:CustomGuiReworked:2.3.0")
+    compileOnly("com.github.amper24:CustomGuiReworked:2.4.0")
 
     // Для тестов (если нужны) — отдельно, как в этом проекте:
     testCompileOnly("io.papermc.paper:paper-api:26.2.build.123-stable")
@@ -303,7 +317,7 @@ repositories {
 
 dependencies {
     compileOnly 'io.papermc.paper:paper-api:26.2.build.123-stable'
-    compileOnly 'com.github.amper24:CustomGuiReworked:2.3.0'
+    compileOnly 'com.github.amper24:CustomGuiReworked:2.4.0'
 
     testCompileOnly 'io.papermc.paper:paper-api:26.2.build.123-stable'
     testImplementation 'org.junit.jupiter:junit-jupiter:6.0.3'
@@ -358,7 +372,7 @@ shadowJar {
         <maven.compiler.target>25</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <paper.version>26.2.build.123-stable</paper.version>
-        <cgui.version>2.3.0</cgui.version>
+        <cgui.version>2.4.0</cgui.version>
     </properties>
 
     <repositories>
@@ -455,26 +469,26 @@ mvn clean package -U   # -U форсит проверку JitPack
 
 Если нет доступа к Maven-репозиториям:
 
-1. Скачай `CustomGuiReworked-2.3.0.jar` из релизов GitHub в папку `libs/` твоего проекта.
+1. Скачай `CustomGuiReworked-2.4.0.jar` из релизов GitHub в папку `libs/` твоего проекта.
 2. Подключи:
 
 **Gradle Kotlin:**
 ```kotlin
 dependencies {
-    compileOnly(files("libs/CustomGuiReworked-2.3.0.jar"))
+    compileOnly(files("libs/CustomGuiReworked-2.4.0.jar"))
 }
 ```
 
 **Gradle Groovy:**
 ```groovy
 dependencies {
-    compileOnly files('libs/CustomGuiReworked-2.3.0.jar')
+    compileOnly files('libs/CustomGuiReworked-2.4.0.jar')
 }
 ```
 
 **Maven (system scope — не рекомендуется, лучше install):**
 ```bash
-mvn install:install-file -Dfile=libs/CustomGuiReworked-2.3.0.jar -DgroupId=com.github.amper24 -DartifactId=CustomGuiReworked -Dversion=2.3.0 -Dpackaging=jar
+mvn install:install-file -Dfile=libs/CustomGuiReworked-2.4.0.jar -DgroupId=com.github.amper24 -DartifactId=CustomGuiReworked -Dversion=2.4.0 -Dpackaging=jar
 ```
 А потом зависимость как выше с `provided`.
 
@@ -524,7 +538,7 @@ public void onEnable() {
 
 | Что указать | Пример | Когда использовать |
 |---|---|---|
-| Релиз-тег | `2.3.0` | Продакшн, стабильно |
+| Релиз-тег | `2.4.0` | Продакшн, стабильно |
 | Предыдущий релиз | `2.2.0` | Если нужна совместимость |
 | Коммит | `a1b2c3d` (7 символов) | Тест фикса до релиза |
 | Ветка | `main-SNAPSHOT` | Разработка, всегда последний main |
@@ -544,7 +558,7 @@ public void onEnable() {
 - **`IllegalStateException: service not registered`** — ты вызываешь API до включения CustomGuiReworked. Решение: `softdepend` + вызов из `onEnable`, а не из конструктора / static init.
 - **`ClassNotFoundException: GuiService`** — забыл `compileOnly` зависимость или не добавил JitPack репозиторий.
 - **Jar вырос на 5+ MB** — ты зашейдил CustomGuiReworked. Проверь `compileOnly` / `provided` и `shadowJar { exclude }`.
-- **JitPack 401 / не находит артефакт** — первая сборка ещё идёт. Открой https://jitpack.io/com/github/amper24/CustomGuiReworked/2.3.0/build.log и дождись `Build OK`.
+- **JitPack 401 / не находит артефакт** — первая сборка ещё идёт. Открой https://jitpack.io/com/github/amper24/CustomGuiReworked/2.4.0/build.log и дождись `Build OK`.
 - **`UnsupportedClassVersionError`** — собираешь под Java 25, а сервер на Java 21. Этот плагин требует **Java 25** — см. [`jitpack.yml`](jitpack.yml) и `targetJavaVersion = 25` в [`build.gradle`](build.gradle).
 
 ### Доступ к сервису
@@ -648,6 +662,37 @@ Gui getBlockGui(String blockId)
 Set<String> getBlockIds(String guiName)
 ```
 
+**Локальные оверрайды (per-зритель; очищаются при закрытии GUI):**
+```java
+void setLocalTitle(Player, String)                       // null — название из файла
+String getLocalTitle(Player)
+void clearLocalTitle(Player)
+void setLocalDesign(Player, int slot, ItemStack item)    // DESIGN/RESULT; null — дизайн из файла
+void setLocalDesigns(Player, Map<Integer, ItemStack> slots)
+void clearLocalDesign(Player, int slot)
+void clearAllLocalDesigns(Player)
+ItemStack getLocalDesign(Player, int slot)
+void setLocalDesign(Player, Location block, int slot, ItemStack item)  // per-блок
+void setLocalTitle(Player, Location block, String title)
+```
+
+**Функциональные блоки / работа без открытого GUI:**
+```java
+FunctionalBlockRegistry getFunctionalBlocks()
+ItemStack getBlockSlotItem(Location block, int slot)           // слот блока при закрытом GUI
+boolean setBlockSlotItem(Location block, int slot, ItemStack item)  // + перерисовка зрителей + событие
+int consumeBlockSlotItem(Location block, int slot, int amount)
+FunctionalBlockData blockData(Location block)                  // персистентный KV (через CraftEngine)
+FunctionalBlockData blockData(String blockId, Location block)  // с явным ID
+void setWorking(Location block, boolean working)               // onBlockTick тикает (флаг персистится)
+boolean isWorking(Location block)
+Location getOpenBlockLocation(Player player)
+List<Player> getViewers(Location block)
+boolean matchesCraft(Inventory, CraftingRecipe)
+int consumeFuel(Inventory, int amount)
+boolean produceResult(Inventory, Map<Integer, ItemStack> results)
+```
+
 Реализация — [`GuiServiceImpl.java`](src/main/java/dev/moonaticks/customGuiReworked/api/GuiServiceImpl.java), открытие — [`GuiOpener.java`](src/main/java/dev/moonaticks/customGuiReworked/gui/GuiOpener.java), реестр — [`GuiRegistry.java`](src/main/java/dev/moonaticks/customGuiReworked/gui/GuiRegistry.java).
 
 ### Storage API
@@ -690,6 +735,7 @@ CustomGuiAPI.unregisterBlockGui("itemsadder:ruby_ore");
 | [`GuiCloseEvent`](src/main/java/dev/moonaticks/customGuiReworked/api/event/GuiCloseEvent.java) | после close + save | нет | `getPlayer()`, `getGui()`, `getStorageKey()` |
 | [`GuiSlotClickEvent`](src/main/java/dev/moonaticks/customGuiReworked/api/event/GuiSlotClickEvent.java) | клик по верхнему инвентарю, включая DESIGN | два уровня | `getSlot()`, `getSlotType()`, `getClick()`, `getAction()`, `getCurrentItem()`, `getCursor()`, `getHotbarButton()`, `getHandle()`, `isTopInventory()`, `setCancelled()` (только команды), `setInteractionCancelled()` (команды + ванильный клик) |
 | [`GuiDragEvent`](src/main/java/dev/moonaticks/customGuiReworked/api/event/GuiDragEvent.java) | drag по слотам | **да** | `getTopSlots()` (immutable), `getHandle()` |
+| [`GuiSlotChangedEvent`](src/main/java/dev/moonaticks/customGuiReworked/api/event/GuiSlotChangedEvent.java) | содержимое слота реально изменилось (следующий тик; DESIGN не отслеживается) | нет | `getSlot()`, `getSlotType()`, `getOldItem()`, `getNewItem()` — фактические «было/стало»; для блоков есть более ранний `FunctionalBlockHandler#onItemChanged` |
 
 ```java
 @EventHandler
@@ -773,8 +819,10 @@ CustomGuiAPI.registerBlockGui("craftengine:atm", "bank");
 ```
 CustomGuiReworked/
 ├── API.md                          # Гайд по API
+├── EXAMPLES.md                     # Готовые примеры (от первого GUI до котла)
 ├── MECHANICS.md                    # Внутренние механики
 ├── README.md                       # Этот файл
+├── docs/                           # Wiki-документация (Home/api/smart-block/scripts/examples)
 ├── build.gradle                    # Сборка, зависимости, публикация
 ├── settings.gradle
 ├── gradle.properties
@@ -791,7 +839,9 @@ CustomGuiReworked/
 │   │   │   ├── StorageType.java
 │   │   │   ├── SlotCommand.java
 │   │   │   ├── GuiServiceImpl.java
-│   │   │   └── event/
+│   │   │   ├── functional/         # Функциональные блоки (FunctionalBlock, Data, Registry, CraftingRecipe)
+│   │   │   ├── animation/          # DesignAnimation (кадры + stageForProgress)
+│   │   │   └── event/              # Включая GuiSlotChangedEvent («было/стало»)
 │   │   ├── gui/                    # Ядро GUI
 │   │   ├── storage/                # Хранилище
 │   │   ├── codec/                  # Кодеки предметов
@@ -823,40 +873,48 @@ CustomGuiReworked/
 - **JDK 25**, Gradle 9 (wrapper в репо) — см. [`build.gradle`](build.gradle) `targetJavaVersion = 25`
 - `./gradlew build` → `build/libs/CustomGuiReworked.jar` (и `-sources.jar` благодаря `withSourcesJar()`)
 - `./gradlew runServer` — Paper 26.2 тестовый сервер (плагин `xyz.jpenilla.run-paper`)
-- `./gradlew test` — 64+ теста, см. [`src/test/`](src/test/java/dev/moonaticks/customGuiReworked/)
+- `./gradlew test` — 150 тестов, см. [`src/test/`](src/test/java/dev/moonaticks/customGuiReworked/)
 
-Публикация: JitPack по тегу — `com.github.amper24:CustomGuiReworked:2.3.0` (первая сборка ~1-2 мин).
+Публикация: JitPack по тегу — `com.github.amper24:CustomGuiReworked:2.4.0` (первая сборка ~1-2 мин).
 
 ---
 
 ## Skript и Denizen (кратко)
 
-Подробно — в [`API.md#10`](API.md#10-skript-и-denizen) и исходниках [`skript/`](src/main/java/dev/moonaticks/customGuiReworked/skript/) / [`denizen/`](src/main/java/dev/moonaticks/customGuiReworked/denizen/).
+Подробно — в [`API.md#10`](API.md#10-skript-и-denizen), [docs/scripts.md](docs/scripts.md) и исходниках [`skript/`](src/main/java/dev/moonaticks/customGuiReworked/skript/) / [`denizen/`](src/main/java/dev/moonaticks/customGuiReworked/denizen/).
 
-**Skript:**
+**Skript** — события `on cgui open/close/click/drag` и главное `on cgui slot changed` (контекст: `event-player`, `event-string`, `event-number`, `event-location`, `cgui old/new item of event`); эффекты и выражения для всего нового:
 ```skript
-on cgui open:
-    broadcast "%event-player% открыл %event-string%"
+on cgui slot changed:
+    event-string is "cooking_pot"
+    if event-number is 1, 2, 3, 10, 11, 12:
+        set cgui working of event-location to true
 
-on cgui click:
-    if event-string is "shop":
-        if event-number is 22:
-            cancel event
-
-open cgui "shop" to player
-close cgui of player
+set cgui local design of player at slot 5 to arrow stage item
+set cgui local title of player to "&bКотёл 42%"
+clear cgui local designs of player
+set cgui working of location to true
+set cgui block data of location key "cook" to "42"
+set cgui block item at slot 24 of location to cooked stew
+the cgui block of player
+all cgui viewers of location
+cgui progress stage of 51 out of 200 in 4 frames
 ```
 
-**Denizen:**
+**Denizen** — события (контексты `player/gui/slot/slot_type/block/old_item/new_item`), теги `<cgui...>` и изменения — механизмами `adjust` (в этой линии Denizen 1.3.x нет «mechanics»):
 ```denizen
-on cgui click:
-    - if <context.gui> == shop:
-        - determine cancelled
-on cgui drag:
-    - announce "drag over <context.slots>"
-```
+on cgui slot changed:
+    - if <context.gui> == cooking_pot && <context.slot> in 1, 2, 3, 10, 11, 12:
+        - adjust <context.block> cgui_working:true
 
-Теги: `<cgui.guis>`, `<cgui.exists[shop]>`, `<cgui.size[shop]>`, `<cgui.title[shop]>`, `<cgui.storage[shop]>`, `<cgui.open_of[<player>]>`.
+- adjust <player> cgui_local_design:[5|arrow item]
+- adjust <player> cgui_local_title:"&bКотёл 42%"
+- adjust <loc> cgui_block_data:[cook|42]
+- adjust <loc> cgui_block_item:[24|cooked stew]
+
+<cgui.working[<loc>]>  <cgui.block_of[<player>]>  <cgui.viewers[<loc>]>
+<cgui.block_item[[<loc>]|24]>  <cgui.block_data[[<loc>]|cook]>
+```
 
 ---
 

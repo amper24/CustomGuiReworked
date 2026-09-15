@@ -32,6 +32,26 @@ class GuiHolderTest {
     }
 
     @Test
+    void trackedSlotTypesIncludeResult() {
+        // Отслеживаются персистентные слоты + RESULT (для GuiSlotChangedEvent),
+        // DESIGN — нет.
+        assertTrue(GuiHolder.isTracked(SlotType.CONTAINER));
+        assertTrue(GuiHolder.isTracked(SlotType.CRAFT));
+        assertTrue(GuiHolder.isTracked(SlotType.FUEL));
+        assertTrue(GuiHolder.isTracked(SlotType.RESULT));
+        assertFalse(GuiHolder.isTracked(SlotType.DESIGN));
+    }
+
+    @Test
+    void sessionPlayerIsStored() {
+        GuiHolder holder = newHolder();
+        assertNull(holder.player());
+        java.util.UUID uuid = java.util.UUID.randomUUID();
+        holder.setPlayer(uuid);
+        assertSame(uuid, holder.player());
+    }
+
+    @Test
     void holdsGuiAndKey() {
         Gui gui = new Gui("test");
         StorageKey key = new StorageKey(StorageType.TEAM, "red", "test.yml");

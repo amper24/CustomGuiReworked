@@ -2,7 +2,7 @@
 # on startup the plugin refreshes the file on disk when its version is
 # older (the previous file is kept next to it as <name>.bak).
 # Can be disabled in config.yml: language-auto-update: false
-lang-version: 2
+lang-version: 3
 
 language:
   # ---------- Common ----------
@@ -11,6 +11,7 @@ language:
     broken:
       skeleton: "§cThis interface is broken: the skeleton is not loaded correctly."
     blockNoLocation: "§cThis GUI uses block storage, but no block was provided."
+    blockDenied: "§cYou can't use this block."
     temporaryReturned: "§eYour temporary items were returned."
 
   # ---------- Editor ----------
