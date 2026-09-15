@@ -11,6 +11,7 @@ import dev.moonaticks.customGuiReworked.codec.Codecs;
 import dev.moonaticks.customGuiReworked.editor.EditorHolder;
 import dev.moonaticks.customGuiReworked.editor.EditorListener;
 import dev.moonaticks.customGuiReworked.editor.EditorManager;
+import dev.moonaticks.customGuiReworked.api.functional.FunctionalBlockRegistry;
 import dev.moonaticks.customGuiReworked.gui.GuiHolder;
 import dev.moonaticks.customGuiReworked.gui.GuiOpener;
 import dev.moonaticks.customGuiReworked.gui.GuiRegistry;
@@ -35,6 +36,8 @@ import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.plugin.ServicePriority;
+import org.bukkit.scheduler.BukkitRunnable;
+import org.bukkit.scheduler.BukkitTask;
 
 import java.io.File;
 import java.io.IOException;
@@ -69,6 +72,9 @@ public final class CustomGuiReworked extends JavaPlugin {
     private BlockHookDispatcher dispatcher;
     private BlockHookManager hookManager;
     private GuiService registeredService;
+    private FunctionalBlockRegistry functionalBlocks;
+    /** Тикер onTick функциональных блоков (каждые 5 тиков). */
+    private BukkitTask functionalTickTask;
 
     @Override
     public void onEnable() {
@@ -107,6 +113,21 @@ public final class CustomGuiReworked extends JavaPlugin {
         hookManager = new BlockHookManager(this);
         hookManager.init(dispatcher);
 
+        // Функциональные блоки: реестр обработчиков + тикер onTick
+        // (каждые 5 тиков — анимации прогресса, крафты, топливо).
+        functionalBlocks = new FunctionalBlockRegistry(this);
+        functionalTickTask = new BukkitRunnable() {
+            @Override
+            public void run() {
+                try {
+                    dispatcher.tickFunctionalBlocks();
+                } catch (Exception e) {
+                    getLogger().warning("Functional blocks tick failed: " + e.getMessage());
+                }
+            }
+        }.runTaskTimer(this, BlockHookDispatcher.FUNCTIONAL_TICK_INTERVAL,
+                BlockHookDispatcher.FUNCTIONAL_TICK_INTERVAL);
+
         getServer().getPluginManager().registerEvents(new GuiInteractionListener(this), this);
         getServer().getPluginManager().registerEvents(new EditorListener(this, editor), this);
         getServer().getPluginManager().registerEvents(new PlayerListener(this), this);
@@ -134,6 +155,12 @@ public final class CustomGuiReworked extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        // Тикер функциональных блоков — до закрытия меню (иначе onTick
+        // может дёрнуть уже закрывающиеся инвентари).
+        if (functionalTickTask != null) {
+            functionalTickTask.cancel();
+            functionalTickTask = null;
+        }
         // Сначала закрываем все наши меню (на основном потоке, пока I/O жив):
         // закрытие само делает финальную реконсиляцию и saveNow, плюс из GUI
         // возвращаются/дропаются предметы. Иначе после выключения листенеры
@@ -283,5 +310,10 @@ public final class CustomGuiReworked extends JavaPlugin {
 
     public BlockHookManager hooks() {
         return hookManager;
+    }
+
+    /** Реестр функциональных блоков (печь/верстак/бочка/генератор). */
+    public FunctionalBlockRegistry functionalBlocks() {
+        return functionalBlocks;
     }
 }

@@ -1,10 +1,14 @@
 package dev.moonaticks.customGuiReworked.api;
 
+import dev.moonaticks.customGuiReworked.api.functional.CraftingRecipe;
+import dev.moonaticks.customGuiReworked.api.functional.FunctionalBlockRegistry;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -154,4 +158,134 @@ public interface GuiService {
 
     /** Очищает данные хранилища. */
     void deleteStorage(StorageType type, String owner, String table);
+
+    // ================= локальные оверрайды (per-viewer) =================
+    //
+    // Методы работают с GUI, который игрок открыл прямо сейчас:
+    // подменяют название/дизайн только для этой сессии — файл GUI,
+    // другие игроки и другие блоки не затрагиваются. Все оверрайды
+    // очищаются при закрытии GUI и никогда не пишутся в файл
+    // (пока не вызван saveGui() с явными изменениями GUI).
+
+    /**
+     * Устанавливает локальное название окна открытого GUI игрока.
+     * Поддерживает legacy-коды цвета (§) как и заголовок из файла.
+     *
+     * <p>Если окно уже открыто на сервере, где заголовок окна
+     * неизменяем, название применится при следующем открытии GUI.
+     *
+     * @param title название; null — вернуть название из файла
+     */
+    void setLocalTitle(Player player, String title);
+
+    /** Локальное название окна, либо null (используется название из файла). */
+    String getLocalTitle(Player player);
+
+    /** Возвращает открытому GUI игрока название из файла. */
+    void clearLocalTitle(Player player);
+
+    /**
+     * Устанавливает локальный предмет в DESIGN/RESULT слот открытого GUI.
+     *
+     * @param player игрок
+     * @param slot   DESIGN/RESULT слот
+     * @param item   предмет; null — сбросить оверрайд (вернуть дизайн из файла)
+     * @throws IllegalArgumentException если GUI не открыт для игрока и слот
+     *                                 не DESIGN/RESULT
+     */
+    void setLocalDesign(Player player, int slot, ItemStack item);
+
+    /**
+     * Устанавливает сразу несколько локальных предметов (все валидируются
+     * до применения; слоты — DESIGN/RESULT).
+     */
+    void setLocalDesigns(Player player, Map<Integer, ItemStack> slots);
+
+    /** Сбрасывает локальный предмет одного слота (возвращает дизайн из файла). */
+    void clearLocalDesign(Player player, int slot);
+
+    /** Сбрасывает все локальные предметы сессии. */
+    void clearAllLocalDesigns(Player player);
+
+    /** Локальный предмет слота, либо null (показывается дизайн из файла). */
+    ItemStack getLocalDesign(Player player, int slot);
+
+    /**
+     * Пер-блок + пер-плеер: устанавливает локальный предмет для GUI,
+     * который {@code player} открыл на блоке {@code block}.
+     * (Хранилище BLOCK уже ключится по «world:x,y,z» — метод просто
+     * не даёт ошибиться с сессией.)
+     */
+    void setLocalDesign(Player player, Location block, int slot, ItemStack item);
+
+    /**
+     * Пер-блок + пер-плеер: локальное название для GUI, открытый
+     * {@code player} на блоке {@code block}.
+     */
+    void setLocalTitle(Player player, Location block, String title);
+
+    // ================= утилиты =================
+
+    /**
+     * Готовит предмет к размещению как дизайн: клонирует, ставит
+     * {@code maxStackSize} равным количеству и скрытый PDC-маркер
+     * (анти-дюп: ванильная механика не влечёт/не сливает такие предметы).
+     *
+     * @return подготовленный клон; null для AIR/null
+     */
+    ItemStack prepareDesignItem(ItemStack item);
+
+    /**
+     * Локация блока, на котором игрок открыл GUI прямо сейчас
+     * (для BLOCK-хранилища), либо null.
+     */
+    Location getOpenBlockLocation(Player player);
+
+    /**
+     * Все онлайн-игроки, у которых прямо сейчас открыт GUI на блоке.
+     */
+    List<Player> getViewers(Location block);
+
+    // ================= крафт / топливо / результат =================
+
+    /**
+     * Соответствует ли содержимое инвентаря рецепту крафта
+     * (CRAFT-слоты против {@link CraftingRecipe#getIngredients()}).
+     *
+     * @param inventory инвентарь GUI (с holder'ом плагина)
+     * @param recipe    рецепт
+     * @return true, если рецепт валиден
+     */
+    boolean matchesCraft(Inventory inventory, CraftingRecipe recipe);
+
+    /**
+     * Расходует до {@code amount} предметов из FUEL-слотов инвентаря
+     * (в порядке слотов) и планирует запись изменений в хранилище.
+     *
+     * @return сколько реально было расходу
+     */
+    int consumeFuel(Inventory inventory, int amount);
+
+    /**
+     * Выдаёт результаты в RESULT-слоты «как есть» (не локально):
+     * предмет появляется в инвентаре и доступен игроку.
+     *
+     * <p>Все-or-nothing: сначала проверяются все слоты (целевой слот —
+     * RESULT, пустой либо similar с запасом под стек), и только если
+     * всё влезает — предметы ставятся.
+     *
+     * @param inventory инвентарь GUI (с holder'ом плагина)
+     * @param results   RESULT-слоты: слот → предмет
+     * @return true, если все результаты выдааны
+     */
+    boolean produceResult(Inventory inventory, Map<Integer, ItemStack> results);
+
+    // ================= функциональные блоки =================
+
+    /**
+     * Реестр функциональных блоков (печь/верстак/бочка/генератор).
+     * Удобный вход — {@link FunctionalBlock#builder(String)}
+     * или {@code CustomGuiAPI.functionalBlock(String)}.
+     */
+    FunctionalBlockRegistry getFunctionalBlocks();
 }

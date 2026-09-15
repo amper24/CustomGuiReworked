@@ -4,14 +4,17 @@ import dev.moonaticks.customGuiReworked.CustomGuiReworked;
 import dev.moonaticks.customGuiReworked.api.Gui;
 import dev.moonaticks.customGuiReworked.api.SlotType;
 import dev.moonaticks.customGuiReworked.api.StorageType;
+import dev.moonaticks.customGuiReworked.api.animation.DesignAnimation;
 import dev.moonaticks.customGuiReworked.api.event.GuiCloseEvent;
 import dev.moonaticks.customGuiReworked.api.event.GuiOpenEvent;
 import dev.moonaticks.customGuiReworked.codec.Codecs;
 import dev.moonaticks.customGuiReworked.lang.LanguageManager;
+import dev.moonaticks.customGuiReworked.storage.BlockStorageBackend;
 import dev.moonaticks.customGuiReworked.storage.StorageKey;
 import dev.moonaticks.customGuiReworked.storage.StorageService;
 import dev.moonaticks.customGuiReworked.util.DesignItems;
 import dev.moonaticks.customGuiReworked.util.ItemDrops;
+import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
@@ -23,7 +26,10 @@ import org.bukkit.scoreboard.Team;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.scheduler.BukkitTask;
 
+import java.lang.reflect.Method;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -34,10 +40,25 @@ import java.util.concurrent.ConcurrentHashMap;
  *
  * <p>Чтение диска при открытии выполняется асинхронно ({@link StorageService#preload}),
  * сам инвентарь собирается и открывается строго на основном потоке.
+ *
+ * <p><b>Локальные оверрайды (per-viewer).</b> При сборке инвентаря и в
+ * {@link #rescueDesignItems} для каждого DESIGN-слота «ожидаемый» предмет
+ * берётся из {@link GuiHolder#getLocalDesign(int)} если оверрайд задан,
+ * иначе из файла GUI. Название окна в {@link #finishOpen} — из
+ * {@link GuiHolder#getLocalTitle()} если задан, иначе из {@link Gui#title()}.
+ * Все оверрайды очищаются при {@link #handleClose}.
  */
 public class GuiOpener {
 
     private static final LegacyComponentSerializer SERIALIZER = LegacyComponentSerializer.legacySection();
+
+    /**
+     * Кэш: есть ли у {@link org.bukkit.inventory.InventoryView} сеттер
+     * заголовка окна ({@code setWindowTitle(Component)}) — в старых
+     * сборках Paper его нет. Ищем один раз, не на каждом вызове.
+     */
+    private static volatile Method viewTitleSetter;
+    private static volatile boolean viewTitleSetterChecked;
 
     private final CustomGuiReworked plugin;
     private final GuiRegistry registry;
@@ -66,7 +87,7 @@ public class GuiOpener {
      * Открывает GUI. Для {@link StorageType#BLOCK} без локации — отказ.
      */
     public void openForPlayer(Player player, Gui gui) {
-        openForPlayer(player, gui, null);
+        openForPlayer(player, gui, null, null, null);
     }
 
     /**
@@ -77,7 +98,7 @@ public class GuiOpener {
      * @param blockLocation локация блока (обязательна для BLOCK-хранилища, игнорируется иначе)
      */
     public void openForPlayer(Player player, Gui gui, Location blockLocation) {
-        openForPlayer(player, gui, blockLocation, null);
+        openForPlayer(player, gui, blockLocation, null, null);
     }
 
     /**
@@ -89,6 +110,22 @@ public class GuiOpener {
      * @param storageOverride временный тип хранилища (null — тип самого GUI)
      */
     public void openForPlayer(Player player, Gui gui, Location blockLocation, StorageType storageOverride) {
+        openForPlayer(player, gui, blockLocation, storageOverride, null);
+    }
+
+    /**
+     * Открывает GUI.
+     *
+     * @param player          игрок
+     * @param gui             GUI
+     * @param blockLocation   локация блока (обязательна для BLOCK-хранилища, игнорируется иначе)
+     * @param storageOverride временный тип хранилища (null — тип самого GUI)
+     * @param blockId         ID кастомного блока (itemsadder:/craftengine:) — для
+     *                        диспетчеризации функциональных блоков; null, если блок
+     *                        не функциональный или GUI открыт программно
+     */
+    public void openForPlayer(Player player, Gui gui, Location blockLocation,
+                              StorageType storageOverride, String blockId) {
         if (player == null || gui == null) {
             return;
         }
@@ -114,7 +151,7 @@ public class GuiOpener {
             if (!openRequests.getOrDefault(player.getUniqueId(), -1L).equals(requestId)) {
                 return;
             }
-            finishOpen(player, gui, key, requestId);
+            finishOpen(player, gui, key, requestId, blockLocation, blockId);
         });
     }
 
@@ -134,13 +171,22 @@ public class GuiOpener {
         };
     }
 
-    private void finishOpen(Player player, Gui gui, StorageKey key, long requestId) {
+    private void finishOpen(Player player, Gui gui, StorageKey key, long requestId,
+                            Location blockLocation, String blockId) {
         String[] stored = key.type() == StorageType.TEMPORARY ? null : storage.load(key);
 
         GuiHolder holder = new GuiHolder(gui, key);
-        Inventory inventory = Bukkit.createInventory(holder, gui.slots(), SERIALIZER.deserialize(gui.title()));
+        if (key.type() == StorageType.BLOCK) {
+            // Запоминаем блок сессии: из параметра открытия, иначе — из owner-ключа.
+            holder.setBlockLocation(blockLocation != null && blockLocation.getWorld() != null
+                    ? blockLocation
+                    : StorageKey.blockLocation(key.owner()));
+        }
+        // Название: локальный оверрайд (если уже задан), иначе из файла GUI.
+        String title = holder.getLocalTitle() != null ? holder.getLocalTitle() : gui.title();
+        Inventory inventory = Bukkit.createInventory(holder, gui.slots(), SERIALIZER.deserialize(title));
         holder.attach(inventory);
-        applyDesign(inventory, gui);
+        applyDesign(inventory, holder);
         if (stored != null) {
             applyStorage(inventory, gui, stored);
         }
@@ -154,6 +200,17 @@ public class GuiOpener {
             openRequests.remove(player.getUniqueId(), requestId);
             return;
         }
+
+        // Функциональные блоки: onOpen-колбэк перед показом окна —
+        // оттуда удобно сетаить локальный title/design (он ещё «свежий»).
+        if (key.type() == StorageType.BLOCK && holder.blockLocation() != null) {
+            plugin.dispatcher().onFunctionalOpen(player, holder, holder.blockLocation(), blockId);
+        }
+        // Локальный title мог быть задан в GuiOpenEvent/onOpen —
+        // инвентарь ещё не открыт, переделываем заголовок без моргания.
+        if (holder.getLocalTitle() != null) {
+            inventory = retitle(holder, gui, inventory);
+        }
         openRequests.remove(player.getUniqueId(), requestId);
         openGuis.put(player.getUniqueId(), gui);
         if (key.type() == StorageType.BLOCK) {
@@ -162,12 +219,36 @@ public class GuiOpener {
         player.openInventory(inventory);
     }
 
-    private void applyDesign(Inventory inventory, Gui gui) {
+    /**
+     * Пересоздаёт инвентарь того же holder'а с новым заголовком
+     * (инвентарь ещё не открыт игроку, поэтому без моргания).
+     */
+    private Inventory retitle(GuiHolder holder, Gui gui, Inventory old) {
+        Inventory next = Bukkit.createInventory(holder, gui.slots(),
+                SERIALIZER.deserialize(holder.getLocalTitle()));
+        for (int i = 0; i < old.getSize(); i++) {
+            next.setItem(i, old.getItem(i));
+        }
+        holder.attach(next);
+        return next;
+    }
+
+    /**
+     * Ставит дизайн в DESIGN-слоты инвентаря.
+     * Ожидаемый предмет: локальный оверрайд ({@link GuiHolder#getLocalDesign(int)})
+     * если задан, иначе — дизайн из файла. Каждый предмет проходит
+     * {@link DesignItems#prepare} (maxStackSize + PDC-маркер, анти-дюп).
+     */
+    void applyDesign(Inventory inventory, GuiHolder holder) {
+        Gui gui = holder.gui();
         for (int i = 0; i < gui.slots(); i++) {
             if (gui.slotType(i) != SlotType.DESIGN) {
                 continue;
             }
-            org.bukkit.inventory.ItemStack item = DesignItems.prepare(Codecs.decode(gui.designAt(i)));
+            ItemStack local = holder.getLocalDesign(i);
+            ItemStack item = local != null
+                    ? DesignItems.prepare(local)
+                    : DesignItems.prepare(Codecs.decode(gui.designAt(i)));
             if (item != null && item.getType() != Material.AIR) {
                 inventory.setItem(i, item);
             }
@@ -209,8 +290,11 @@ public class GuiOpener {
      * Если стак «слился» с декоративным предметом — возвращается
      * только дельта, сам дизайн восстанавливается как был (с маркером
      * и maxStackSize, подготовленными {@link DesignItems#prepare}).
+     *
+     * <p>«Ожидаемый» предмет — локальный оверрайд, если он задан,
+     * иначе дизайн из файла.
      */
-    private void rescueDesignItems(GuiHolder holder) {
+    void rescueDesignItems(GuiHolder holder) {
         Gui gui = holder.gui();
         Inventory inv = holder.getInventory();
         if (inv == null) {
@@ -221,7 +305,10 @@ public class GuiOpener {
                 continue;
             }
             ItemStack current = inv.getItem(i);
-            ItemStack expected = DesignItems.prepareExpected(Codecs.decode(gui.designAt(i)));
+            ItemStack local = holder.getLocalDesign(i);
+            ItemStack expected = local != null
+                    ? DesignItems.prepare(local)
+                    : DesignItems.prepareExpected(Codecs.decode(gui.designAt(i)));
             if (current == null || current.getType() == Material.AIR) {
                 // Слот опустел (например double-click стянул дизайн на курсор) —
                 // возвращаем оформление на место. Слитый с курсором стек всё
@@ -234,7 +321,9 @@ public class GuiOpener {
                 inv.setItem(i, expected);
                 if (delta > 0) {
                     // Лишние предметы влитые в декоративный стак — возвращаем игроку.
-                    giveBack(holder, new ItemStack(current.getType(), delta));
+                    ItemStack deltaItem = current.clone();
+                    deltaItem.setAmount(delta);
+                    giveBack(holder, deltaItem);
                 }
                 // При delta < 0 часть декора, гипотетически, унесли — expected
                 // уже поставлен обратно вызовом выше, этого достаточно.
@@ -263,6 +352,111 @@ public class GuiOpener {
             return; // предмет возвращается одному зрителю
         }
     }
+
+    // ================= локальные оверрайды: живое применение =================
+
+    /**
+     * Применяет (или сбрасывает) локальный дизайн-оверрайд в живом инвентаре:
+     * запоминает его в holder и ставит подготовленный предмет
+     * ({@link DesignItems#prepare}) в слот либо возвращает слот к
+     * дизайну из файла.
+     *
+     * @param holder holder открытой сессии
+     * @param slot   DESIGN/RESULT слот
+     * @param item   предмет; null (или AIR) — сбросить оверрайд
+     */
+    public static void applyLocalDesign(GuiHolder holder, int slot, ItemStack item) {
+        // Валидация (диапазон + тип слота) даже если инвентарь не прицеплён.
+        holder.setLocalDesign(slot, item);
+        Inventory inventory = holder.getInventory();
+        if (inventory == null) {
+            return;
+        }
+        if (item == null || item.getType() == Material.AIR) {
+            inventory.setItem(slot, defaultForSlot(holder, slot));
+        } else {
+            inventory.setItem(slot, DesignItems.prepare(item));
+        }
+    }
+
+    /**
+     * «Ожидаемый» предмет слота без локального оверрайда:
+     * дизайн из файла, подготовленный {@link DesignItems#prepare}
+     * (null, если слот пуст).
+     */
+    public static ItemStack defaultForSlot(GuiHolder holder, int slot) {
+        return DesignItems.prepare(Codecs.decode(holder.gui().designAt(slot)));
+    }
+
+    /**
+     * Применяет локальный заголовок к уже открытому окну игрока.
+     *
+     * <p>Заголовок окна неизменяем в базовом API Bukkit; в новых
+     * сборках Paper есть {@code InventoryView#setWindowTitle(Component)}.
+     * Чтобы не ломать сборку на старых версиях, сеттер вызывается
+     * через reflection (метод ищется один раз). Если метода нет —
+     * заголовок просто сохранится в holder и применится при следующем
+     * открытии GUI, без ошибок.
+     */
+    public void applyLocalTitle(Player player, GuiHolder holder, String title) {
+        if (player == null || holder == null || title == null) {
+            return;
+        }
+        Method setter = viewTitleSetter();
+        if (setter == null) {
+            return;
+        }
+        try {
+            setter.invoke(player.getOpenInventory(), SERIALIZER.deserialize(title));
+        } catch (ReflectiveOperationException e) {
+            // Не критично: заголовок применится при следующем открытии.
+        }
+    }
+
+    private static Method viewTitleSetter() {
+        if (!viewTitleSetterChecked) {
+            synchronized (GuiOpener.class) {
+                if (!viewTitleSetterChecked) {
+                    try {
+                        viewTitleSetter = org.bukkit.inventory.InventoryView.class
+                                .getMethod("setWindowTitle", Component.class);
+                    } catch (NoSuchMethodException e) {
+                        viewTitleSetter = null;
+                    }
+                    viewTitleSetterChecked = true;
+                }
+            }
+        }
+        return viewTitleSetter;
+    }
+
+    // ================= зрители блока =================
+
+    /**
+     * Все онлайн-игроки, у которых прямо сейчас открыт GUI на данном блоке
+     * (BLOCK-хранилище с совпадающим owner-ключом).
+     *
+     * @param location блок (мир должен быть загружен)
+     * @return список зрителей (возможен пустой)
+     */
+    public static List<Player> getViewers(Location location) {
+        List<Player> viewers = new ArrayList<>();
+        if (location == null || location.getWorld() == null) {
+            return viewers;
+        }
+        String owner = BlockStorageBackend.ownerKey(location);
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            Inventory top = player.getOpenInventory().getTopInventory();
+            if (top.getHolder() instanceof GuiHolder holder
+                    && holder.key().type() == StorageType.BLOCK
+                    && holder.key().owner().equals(owner)) {
+                viewers.add(player);
+            }
+        }
+        return viewers;
+    }
+
+    // ================= реконсиляция / закрытие =================
 
     /**
      * Планирует дифную реконсиляцию на следующий тик: к этому моменту
@@ -327,6 +521,9 @@ public class GuiOpener {
     /**
      * Обработка закрытия GUI: для TEMPORARY возвращает предметы,
      * для остальных типов делает финальную реконсиляцию и немедленную запись.
+     *
+     * <p>В конце сессия завершается: локальные оверрайды (дизайн/title/блок)
+     * очищаются, анимации дизайна этого инвентаря останавливаются.
      */
     public void handleClose(Player player, GuiHolder holder) {
         Gui gui = holder.gui();
@@ -359,6 +556,10 @@ public class GuiOpener {
             storage.saveNow(key);
         }
         Bukkit.getPluginManager().callEvent(new GuiCloseEvent(player, gui, inventory, key));
+
+        // Сессия завершена: снимаем пер-вьювер оверрайды и анимации.
+        DesignAnimation.onInventoryClosed(inventory);
+        holder.clearLocalState();
     }
 
     /** Команда игрока по scoreboard (fallback — «default»). */

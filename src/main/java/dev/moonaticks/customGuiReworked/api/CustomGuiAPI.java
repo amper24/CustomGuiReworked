@@ -1,11 +1,16 @@
 package dev.moonaticks.customGuiReworked.api;
 
+import dev.moonaticks.customGuiReworked.api.functional.CraftingRecipe;
+import dev.moonaticks.customGuiReworked.api.functional.FunctionalBlock;
+import dev.moonaticks.customGuiReworked.api.functional.FunctionalBlockRegistry;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -186,5 +191,129 @@ public final class CustomGuiAPI {
 
     public static void deleteStorage(StorageType type, String owner, String table) {
         service().deleteStorage(type, owner, table);
+    }
+
+    // ================= локальные оверрайды (per-viewer) =================
+
+    /**
+     * Локальное название окна открытого GUI игрока (legacy § цвета
+     * поддерживаются). Не трогает файл GUI и других игроков.
+     */
+    public static void setLocalTitle(Player player, String title) {
+        service().setLocalTitle(player, title);
+    }
+
+    /** Локальное название окна, либо null. */
+    public static String getLocalTitle(Player player) {
+        return service().getLocalTitle(player);
+    }
+
+    /** Возвращает название из файла GUI. */
+    public static void clearLocalTitle(Player player) {
+        service().clearLocalTitle(player);
+    }
+
+    /**
+     * Локальный предмет в DESIGN/RESULT слоте открытого GUI игрока.
+     * null — сбросить оверрайд (дизайн из файла).
+     */
+    public static void setLocalDesign(Player player, int slot, ItemStack item) {
+        service().setLocalDesign(player, slot, item);
+    }
+
+    /** Несколько локальных предметов сразу (DESIGN/RESULT слоты). */
+    public static void setLocalDesigns(Player player, Map<Integer, ItemStack> slots) {
+        service().setLocalDesigns(player, slots);
+    }
+
+    /** Сброс одного локального предмета. */
+    public static void clearLocalDesign(Player player, int slot) {
+        service().clearLocalDesign(player, slot);
+    }
+
+    /** Сброс всех локальных предметов сессии. */
+    public static void clearAllLocalDesigns(Player player) {
+        service().clearAllLocalDesigns(player);
+    }
+
+    /** Локальный предмет слота, либо null. */
+    public static ItemStack getLocalDesign(Player player, int slot) {
+        return service().getLocalDesign(player, slot);
+    }
+
+    /**
+     * Пер-блок + пер-плеер: локальный предмет для GUI, открытый
+     * {@code player} на блоке {@code block}.
+     */
+    public static void setLocalDesign(Player player, Location block, int slot, ItemStack item) {
+        service().setLocalDesign(player, block, slot, item);
+    }
+
+    /**
+     * Пер-блок + пер-плеер: локальное название для GUI, открытый
+     * {@code player} на блоке {@code block}.
+     */
+    public static void setLocalTitle(Player player, Location block, String title) {
+        service().setLocalTitle(player, block, title);
+    }
+
+    // ================= утилиты =================
+
+    /**
+     * Готовит предмет к размещению как дизайн (maxStackSize + PDC-маркер,
+     * анти-дюп). Аналог внутренних дизайн-предметов.
+     */
+    public static ItemStack prepareDesignItem(ItemStack item) {
+        return service().prepareDesignItem(item);
+    }
+
+    /** Блок, на котором игрок открыл GUI прямо сейчас, либо null. */
+    public static Location getOpenBlockLocation(Player player) {
+        return service().getOpenBlockLocation(player);
+    }
+
+    /** Все игроки, у которых прямо сейчас открыт GUI на блоке. */
+    public static List<Player> getViewers(Location block) {
+        return service().getViewers(block);
+    }
+
+    // ================= крафт / топливо / результат =================
+
+    /** Валиден ли рецепт крафта в инвентаре (CRAFT-слоты). */
+    public static boolean matchesCraft(Inventory inventory, CraftingRecipe recipe) {
+        return service().matchesCraft(inventory, recipe);
+    }
+
+    /** Расход до {@code amount} предметов из FUEL-слотов; возвращает фактический расход. */
+    public static int consumeFuel(Inventory inventory, int amount) {
+        return service().consumeFuel(inventory, amount);
+    }
+
+    /** Выдача результатов в RESULT-слоты (all-or-nothing); true — удалось. */
+    public static boolean produceResult(Inventory inventory, Map<Integer, ItemStack> results) {
+        return service().produceResult(inventory, results);
+    }
+
+    // ================= функциональные блоки =================
+
+    /** Реестр функциональных блоков. */
+    public static FunctionalBlockRegistry getFunctionalBlocks() {
+        return service().getFunctionalBlocks();
+    }
+
+    /**
+     * Builder функционального блока (печь/верстак/бочка/генератор).
+     *
+     * <pre>{@code
+     * FunctionalBlock.builder("my_furnace")
+     *     .gui("furnace")
+     *     .onOpen((player, block, inv) ->
+     *             CustomGuiAPI.setLocalTitle(player, "§6Печь " + block.getBlockX()))
+     *     .onTick((block, inv) -> updateProgress(block, inv))
+     *     .register();
+     * }</pre>
+     */
+    public static FunctionalBlock.Builder functionalBlock(String blockId) {
+        return FunctionalBlock.builder(blockId);
     }
 }

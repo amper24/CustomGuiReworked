@@ -4,6 +4,7 @@ import dev.moonaticks.customGuiReworked.CustomGuiReworked;
 import dev.moonaticks.customGuiReworked.api.Gui;
 import dev.moonaticks.customGuiReworked.api.SlotCommand;
 import dev.moonaticks.customGuiReworked.api.SlotType;
+import dev.moonaticks.customGuiReworked.api.event.GuiCraftEvent;
 import dev.moonaticks.customGuiReworked.api.event.GuiDragEvent;
 import dev.moonaticks.customGuiReworked.api.event.GuiSlotClickEvent;
 import dev.moonaticks.customGuiReworked.gui.GuiHolder;
@@ -121,7 +122,7 @@ public class GuiInteractionListener implements Listener {
         // Дизайн-слоты неизменяемы, но клик по кнопке работает.
         if (type == SlotType.DESIGN) {
             event.setCancelled(true);
-            boolean runCommands = fireClickEvent(player, gui, top, slot, type, click, event, true);
+            boolean runCommands = fireClickEvent(player, gui, top, slot, type, click, event, true, holder);
             if (runCommands) {
                 runCommands(player, gui, slot);
             }
@@ -135,9 +136,13 @@ public class GuiInteractionListener implements Listener {
             if (placementBlocked) {
                 event.setCancelled(true);
             }
+            // Крафт-событие: игрок берёт результат (или кликает по нему),
+            // а в CRAFT-слотах есть что «крафтить» — точка для валидации
+            // рецепта и расхода CRAFT/FUEL.
+            fireCraftEvent(player, gui, top, slot, click, event);
         }
 
-        boolean runCommands = fireClickEvent(player, gui, top, slot, type, click, event, !placementBlocked);
+        boolean runCommands = fireClickEvent(player, gui, top, slot, type, click, event, !placementBlocked, holder);
 
         // Кандидаты на запись: одиночный клик затрагивает один слот,
         // double-click может перераспределить предметы по всему GUI.
@@ -177,7 +182,7 @@ public class GuiInteractionListener implements Listener {
                 // Дизайн-слот: shift как обычный клик-кнопка, предмет не двигаем.
                 event.setCancelled(true);
                 boolean runCommands = fireClickEvent(player, gui, top, slot, type,
-                        event.getClick(), event, true);
+                        event.getClick(), event, true, holder);
                 if (runCommands) {
                     runCommands(player, gui, slot);
                 }
@@ -188,8 +193,11 @@ public class GuiInteractionListener implements Listener {
             // Результат-слот при shift-клике может запускать привязанные
             // команды (например выдача награды) — это ванильное поведение,
             // раньше команды тоже срабатывали.
+            if (type == SlotType.RESULT) {
+                fireCraftEvent(player, gui, top, slot, event.getClick(), event);
+            }
             boolean runCommands = fireClickEvent(player, gui, top, slot, type,
-                    event.getClick(), event, true);
+                    event.getClick(), event, true, holder);
             holder.addAllCandidates();
             plugin.opener().scheduleReconcile(holder);
             if (runCommands) {
@@ -377,25 +385,64 @@ public class GuiInteractionListener implements Listener {
         }
         plugin.opener().handleClose(player, holder);
         plugin.dispatcher().onInventoryClosed(player, holder.key());
+        // onClose функционального обработчика — после сохранения/консолидации
+        // хранилища и очистки локальных оверрайдов.
+        plugin.dispatcher().onGuiClosed(player, holder);
     }
 
-    // ================= событие API =================
+    // ================= события API =================
 
     /**
      * Вызывает {@link GuiSlotClickEvent}.
+     *
+     * <p>Перед внешними слушателями событие проходит через
+     * функциональный обработчик блока ({@code BlockHookDispatcher#onGuiClick}) —
+     * он может пометить {@code interactionCancelled} и ванильный клик
+     * отменится.
      *
      * @param commandsEnabled разрешены ли привязанные команды при незапамятном
      *                        состоянии события (false — заблокированная кладка)
      * @return true, если команды нужно выполнить
      */
     private boolean fireClickEvent(Player player, Gui gui, Inventory top, int slot, SlotType type,
-                                   ClickType click, InventoryClickEvent handle, boolean commandsEnabled) {
+                                   ClickType click, InventoryClickEvent handle,
+                                   boolean commandsEnabled, GuiHolder holder) {
         GuiSlotClickEvent guiEvent = new GuiSlotClickEvent(player, gui, top, slot, type, true, click, handle);
+        // Функциональный обработчик блока (внутренний) — до внешних слушателей.
+        plugin.dispatcher().onGuiClick(player, holder, slot, type, guiEvent);
         Bukkit.getPluginManager().callEvent(guiEvent);
         if (guiEvent.isInteractionCancelled()) {
             handle.setCancelled(true);
         }
         return commandsEnabled && !guiEvent.isCancelled();
+    }
+
+    /**
+     * Вызывает {@link GuiCraftEvent} для клика по RESULT-слоту
+     * (когда в GUI есть CRAFT-слоты; «крафт потенциально валиден»).
+     * Отмена события отменяет исходный клик (предмет не забирается).
+     */
+    private void fireCraftEvent(Player player, Gui gui, Inventory top, int slot,
+                                ClickType click, InventoryClickEvent handle) {
+        boolean hasCraftItems = false;
+        for (int i = 0; i < gui.slots(); i++) {
+            if (gui.slotType(i) != SlotType.CRAFT) {
+                continue;
+            }
+            ItemStack item = top.getItem(i);
+            if (item != null && item.getType() != Material.AIR) {
+                hasCraftItems = true;
+                break;
+            }
+        }
+        if (!hasCraftItems) {
+            return; // «крафт» невозможен — событие не генерируем
+        }
+        GuiCraftEvent craftEvent = new GuiCraftEvent(player, gui, top, slot, click, hasCraftItems);
+        Bukkit.getPluginManager().callEvent(craftEvent);
+        if (craftEvent.isCancelled()) {
+            handle.setCancelled(true);
+        }
     }
 
     // ================= команды =================
