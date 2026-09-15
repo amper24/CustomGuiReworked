@@ -2,6 +2,8 @@ package dev.moonaticks.customGuiReworked.api;
 
 import dev.moonaticks.customGuiReworked.CustomGuiReworked;
 import dev.moonaticks.customGuiReworked.codec.Codecs;
+import dev.moonaticks.customGuiReworked.api.functional.CraftingRecipe;
+import dev.moonaticks.customGuiReworked.api.functional.FunctionalBlockRegistry;
 import dev.moonaticks.customGuiReworked.gui.GuiHolder;
 import dev.moonaticks.customGuiReworked.gui.GuiOpener;
 import dev.moonaticks.customGuiReworked.storage.BlockStorageBackend;
