@@ -170,6 +170,7 @@ public class GuiInteractionListener implements Listener {
     private void handleShiftClick(Player player, Gui gui, GuiHolder holder,
                                   InventoryClickEvent event, boolean inTop, int slot) {
         Inventory top = event.getView().getTopInventory();
+        Inventory clicked = event.getClickedInventory();
         if (inTop) {
             SlotType type = gui.slotType(slot);
             if (type == SlotType.DESIGN) {
