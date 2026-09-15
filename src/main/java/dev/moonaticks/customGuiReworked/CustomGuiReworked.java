@@ -26,6 +26,7 @@ import dev.moonaticks.customGuiReworked.manager.ManagerListener;
 import dev.moonaticks.customGuiReworked.manager.ManagerMenu;
 import dev.moonaticks.customGuiReworked.skript.SkriptSupport;
 import dev.moonaticks.customGuiReworked.storage.StorageService;
+import dev.moonaticks.customGuiReworked.util.DesignItems;
 import org.bukkit.Bukkit;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.configuration.file.YamlConfiguration;
@@ -76,6 +77,10 @@ public final class CustomGuiReworked extends JavaPlugin {
 
         languageManager = new LanguageManager(this);
         languageManager.load();
+
+        // Утилита маркера/max-stack дизайн-предметов — инициализируем до GUI-opener,
+        // чтобы applyDesign и rescueDesignItems видели NamespacedKey.
+        DesignItems.init(this);
 
         // Кодек предметов: NBTAPI (эталонный формат экосистемы) или Bukkit-fallback.
         // Вторичные кодеки регистрируются всегда, чтобы читать payload любого формата.

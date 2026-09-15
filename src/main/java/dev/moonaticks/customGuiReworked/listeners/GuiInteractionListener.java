@@ -28,11 +28,32 @@ import java.util.List;
  *
  * <p>Гарантии:
  * <ul>
+ *   <li><b>shift-click работает по-ванильному</b>:
+ *     <ul>
+ *       <li>из слотов CONTAINER/CRAFT/FUEL/RESULT верхнего инвентаря → в
+ *           инвентарь игрока (отдаём нативной механике, вниз предметы уносятся
+ *           корректно и не попадают в дизайн/result-слоты по определению);</li>
+ *       <li>из инвентаря игрока → вверх делаем вручную: предметы доливаются
+ *           в подходящие (similar) стаки, затем в пустые слоты — и только в
+ *           CONTAINER/CRAFT/FUEL. DESIGN/RESULT слоты при shift-подъёме
+ *           полностью игнорируются, как будто их «нет».</li>
+ *       <li>из дизайн-слотов shift-клик заблокирован (сами слоты
+ *           неизменяемы, клик по ним обрабатывается как кнопка).</li>
+ *     </ul>
+ *   </li>
+ *   <li>double-click <b>работает</b>: одинаковые предметы нормально
+ *       собираются в один стак и в нижнем инвентаре, и в контейнерных/
+ *       крафт/топливных слотах GUI. Дизайн от кражи защищён двумя
+ *       механизмами: на декоративных предметах стоит PDC-маркер
+ *       ({@code isSimilar} с обычными предметами = false) и
+ *       {@code maxStackSize} равен количеству — в слот не влезет больше
+ *       предметов. Как последний рубеж {@code rescueDesignItems}
+ *       восстанавливает оформление на следующий тик;</li>
  *   <li>дизайн-слоты неизменяемы, но клики по ним (кнопки) запускают
  *       привязанные команды и генерируют {@link GuiSlotClickEvent};</li>
  *   <li>result-слоты — только «на выход»: любые попытки положить туда
  *       предмет (курсор, цифровые клавиши, свап с офхендом, драг,
- *       сдвиг из нижнего инвентаря) заблокированы;</li>
+ *       ручная кладка из shift-click) заблокированы;</li>
  *   <li>изменения читаются со снапшота <b>следующего тика</b> (внутри
  *       InventoryClickEvent инвентарь ещё содержит старые предметы),
  *       дифом по baseline — в хранилище пишутся только изменившиеся
@@ -66,36 +87,32 @@ public class GuiInteractionListener implements Listener {
         int slot = event.getSlot();
         ClickType click = event.getClick();
 
-        if (!inTop) {
-            // Клик по своему инвентарю. Верхний инвентарь меняют только
-            // shift-перенос и double-click (сбор стака на курсор).
-            if (event.isShiftClick()) {
-                // Предмет может распределиться в result-слот — запрещаем,
-                // если result-слоты вообще есть в GUI.
-                if (gui.skeleton().contains(SlotType.RESULT)) {
-                    event.setCancelled(true);
-                    return;
-                }
-                holder.addAllCandidates();
-                plugin.opener().scheduleReconcile(holder);
-            } else if (click == ClickType.DOUBLE_CLICK) {
-                // Double-click собирает совпадающие стаки из ВСЕГО верхнего
-                // инвентаря, включая дизайн-предметы (кража оформления) —
-                // запрещаем при любых дизайн-слотах, иначе реконсилируем всё.
-                if (gui.skeleton().contains(SlotType.DESIGN)) {
-                    event.setCancelled(true);
-                    return;
-                }
-                holder.addAllCandidates();
-                plugin.opener().scheduleReconcile(holder);
-            }
+        // Shift-click обрабатываем отдельно:
+        //   • вверх (из инвентаря игрока в GUI) — ручной перенос, чтобы
+        //     предметы попадали ТОЛЬКО в CONTAINER/CRAFT/FUEL слоты
+        //     (ваниль без этого раскладывает по DESIGN/RESULT);
+        //   • вниз (из CONTAINER/CRAFT/FUEL/RESULT в инвентарь игрока) —
+        //     отдаём ваниле, она работает корректно (вниз предметы
+        //     уносятся в инвентарь игрока, минуя дизайн/result по определению);
+        //   • по DESIGN-слотам — заблокирован (isCancelled=true уже в ветке DESIGN).
+        if (event.isShiftClick()) {
+            handleShiftClick(player, gui, holder, event, inTop, slot);
             return;
         }
 
-        // Double-click по верхнему инвентарю тоже может собрать дизайн —
-        // блокируем его при наличии дизайн-слотов.
-        if (click == ClickType.DOUBLE_CLICK && gui.skeleton().contains(SlotType.DESIGN)) {
-            event.setCancelled(true);
+        if (!inTop) {
+            // Клик по своему инвентарю. Разрешены все не-shift действия ванили
+            // (взять/положить, цифровые клавиши, свап с офхендом, double-click).
+            // Дизайн-предметы от кражи защищены двумя механизмами:
+            //   1. PDC-маркер: isSimilar с обычными предметами = false,
+            //      значит double-click не стягивает декор на курсор;
+            //   2. maxStackSize == amount: в слот не влезет больше предметов.
+            // Для double-click ваниль может перераспределить предметы по
+            // CONTAINER/CRAFT/FUEL слотам — реконсилируем всё.
+            if (click == ClickType.DOUBLE_CLICK) {
+                holder.addAllCandidates();
+                plugin.opener().scheduleReconcile(holder);
+            }
             return;
         }
 
@@ -123,8 +140,8 @@ public class GuiInteractionListener implements Listener {
         boolean runCommands = fireClickEvent(player, gui, top, slot, type, click, event, !placementBlocked);
 
         // Кандидаты на запись: одиночный клик затрагивает один слот,
-        // shift/double могут перераспределить предметы по всему GUI.
-        if (event.isShiftClick() || click == ClickType.DOUBLE_CLICK) {
+        // double-click может перераспределить предметы по всему GUI.
+        if (click == ClickType.DOUBLE_CLICK) {
             holder.addAllCandidates();
         } else {
             holder.addCandidate(slot);
@@ -138,12 +155,153 @@ public class GuiInteractionListener implements Listener {
         }
     }
 
-    /** true, если клик пытается положить предмет в result-слот. */
+    /**
+     * Обработка shift-click:
+     * <ul>
+     *   <li>клик по DESIGN-слоту — отменяем, запускаем команды (кнопка);</li>
+     *   <li>клик из верхнего инвентаря (CONTAINER/CRAFT/FUEL/RESULT) —
+     *       отдаём ваниле, но только после проверки что кладка в результат
+     *       не произошла (для RESULT-слота shift = забрать, это разрешено);</li>
+     *   <li>клик из нижнего инвентаря — вручную переносим предмет в подходящие
+     *       CONTAINER/CRAFT/FUEL слоты верхнего инвентаря (сначала похожие
+     *       стаки, потом пустые), минуя DESIGN/RESULT.</li>
+     * </ul>
+     */
+    private void handleShiftClick(Player player, Gui gui, GuiHolder holder,
+                                  InventoryClickEvent event, boolean inTop, int slot) {
+        Inventory top = event.getView().getTopInventory();
+        Inventory clicked = event.getClickedInventory();
+        if (inTop) {
+            SlotType type = gui.slotType(slot);
+            if (type == SlotType.DESIGN) {
+                // Дизайн-слот: shift как обычный клик-кнопка, предмет не двигаем.
+                event.setCancelled(true);
+                boolean runCommands = fireClickEvent(player, gui, top, slot, type,
+                        event.getClick(), event, true);
+                if (runCommands) {
+                    runCommands(player, gui, slot);
+                }
+                return;
+            }
+            // Из CONTAINER/CRAFT/FUEL/RESULT в свой инвентарь: отдаём ваниле
+            // (предметы уходят в player-inventory, минуя DESIGN/RESULT).
+            // Результат-слот при shift-клике может запускать привязанные
+            // команды (например выдача награды) — это ванильное поведение,
+            // раньше команды тоже срабатывали.
+            boolean runCommands = fireClickEvent(player, gui, top, slot, type,
+                    event.getClick(), event, true);
+            holder.addAllCandidates();
+            plugin.opener().scheduleReconcile(holder);
+            if (runCommands) {
+                runCommands(player, gui, slot);
+            }
+            return;
+        }
+
+        // Shift-клик из своего инвентаря вверх: ваниль раскидывает предмет
+        // по всем слотам без разбора (в т.ч. DESIGN/RESULT), поэтому
+        // делаем перенос вручную ТОЛЬКО в CONTAINER/CRAFT/FUEL.
+        ItemStack source = event.getCurrentItem();
+        if (source == null || source.getType() == Material.AIR || source.getAmount() <= 0) {
+            return;
+        }
+        int moved = moveToTop(top, gui, source);
+        if (moved <= 0) {
+            // Некуда класть — полностью отменяем, ваниль ничего не делает.
+            event.setCancelled(true);
+            return;
+        }
+        // Обновляем слот-источник в инвентаре игрока ЯВНО: в ивенте
+        // getCurrentItem() может возвращать копию, простой .setAmount()
+        // на ней не всегда применяется к реальному инвентарю.
+        int remaining = source.getAmount() - moved;
+        ItemStack left;
+        if (remaining <= 0) {
+            left = null;
+        } else {
+            left = source.clone();
+            left.setAmount(remaining);
+        }
+        clicked.setItem(slot, left);
+        event.setCancelled(true);
+        holder.addAllCandidates();
+        plugin.opener().scheduleReconcile(holder);
+    }
+
+    /**
+     * Переносит как можно больше предметов из {@code source} в подходящие
+     * персистентные слоты ({@code CONTAINER/CRAFT/FUEL}) верхнего
+     * инвентаря: сначала в существующие similar-стаки, потом в пустые.
+     * DESIGN и RESULT слоты полностью пропускаются.
+     *
+     * @return количество фактически перенесённых единиц
+     */
+    private int moveToTop(Inventory top, Gui gui, ItemStack source) {
+        int maxStack = Math.max(1, source.getMaxStackSize());
+        int remaining = source.getAmount();
+        if (remaining <= 0) {
+            return 0;
+        }
+
+        // 1-й проход: доливаем в похожие стаки.
+        for (int i = 0; i < gui.slots() && remaining > 0; i++) {
+            if (!GuiHolder.isPersistable(gui.slotType(i))) {
+                continue; // пропускаем DESIGN и RESULT
+            }
+            ItemStack target = top.getItem(i);
+            if (target == null || target.getType() == Material.AIR) {
+                continue;
+            }
+            if (!target.isSimilar(source)) {
+                continue;
+            }
+            int targetMax = Math.min(maxStack, Math.max(1, target.getMaxStackSize()));
+            int canAdd = targetMax - target.getAmount();
+            if (canAdd <= 0) {
+                continue;
+            }
+            int add = Math.min(canAdd, remaining);
+            target.setAmount(target.getAmount() + add);
+            remaining -= add;
+        }
+
+        // 2-й проход: кладём в пустые слоты.
+        for (int i = 0; i < gui.slots() && remaining > 0; i++) {
+            if (!GuiHolder.isPersistable(gui.slotType(i))) {
+                continue;
+            }
+            ItemStack target = top.getItem(i);
+            if (target != null && target.getType() != Material.AIR) {
+                continue;
+            }
+            int place = Math.min(Math.min(maxStack, source.getMaxStackSize()), remaining);
+            ItemStack placed = source.clone();
+            placed.setAmount(place);
+            top.setItem(i, placed);
+            remaining -= place;
+        }
+
+        return source.getAmount() - remaining;
+    }
+
+    /**
+     * Определяет, пытается ли данный клик ПОЛОЖИТЬ предмет в result-слот.
+     * Возвращает {@code false} для кликов, которые только ЗАБИРАЮТ предмет
+     * (DROP, двойной клик, shift-вынос) или не затрагивают слот.
+     */
     private boolean isPlacementIntoResult(Player player, InventoryClickEvent event) {
         ClickType click = event.getClick();
-        if (event.isShiftClick() || click == ClickType.DOUBLE_CLICK) {
-            return false; // take-only операции
+        // Только-забирающие / не затрагивающие слот действия — не блокируем.
+        if (event.isShiftClick()
+                || click == ClickType.DOUBLE_CLICK
+                || click == ClickType.DROP
+                || click == ClickType.CONTROL_DROP
+                || click == ClickType.WINDOW_BORDER_LEFT
+                || click == ClickType.WINDOW_BORDER_RIGHT
+                || click == ClickType.UNKNOWN) {
+            return false;
         }
+        // Свап с хотбаром: кладка только если в хотбаре есть предмет.
         if (click == ClickType.NUMBER_KEY) {
             int hotbar = event.getHotbarButton();
             if (hotbar >= 0 && hotbar < 9) {
@@ -152,11 +310,15 @@ public class GuiInteractionListener implements Listener {
             }
             return false;
         }
+        // Свап с офхендом: кладка если в офхенде есть предмет.
         if (click == ClickType.SWAP_OFFHAND) {
             ItemStack offhand = player.getInventory().getItemInOffHand();
             return offhand != null && offhand.getType() != Material.AIR;
         }
-        // LEFT/RIGHT/MIDDLE: прямое размещение с курсора
+        // В творческом режиме MIDDLE (pick block) / CREATIVE могут
+        // как дублировать предмет, так и ставить; безопаснее запретить
+        // любую постановку не через пустой курсор.
+        // LEFT/RIGHT/MIDDLE/CREATIVE: прямая кладка с курсора.
         ItemStack cursor = event.getCursor();
         return cursor != null && cursor.getType() != Material.AIR;
     }
