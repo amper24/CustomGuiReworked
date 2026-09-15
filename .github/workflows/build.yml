@@ -11,6 +11,10 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
     steps:
       - uses: actions/checkout@v4
 
@@ -26,36 +30,48 @@ jobs:
 
       - name: Build with Gradle
         id: gradle_build
-        continue-on-error: true
+        shell: bash
         run: |
+          pwd
+          ls -la
+          java -version
           set +e
-          ./gradlew build --no-daemon --stacktrace 2>&1 | tee build.log
+          bash ./gradlew build --no-daemon --stacktrace --console=plain 2>&1 | tee build.log
           status=${PIPESTATUS[0]}
-          echo "gradle_exit=$status" >> "$GITHUB_OUTPUT"
+          echo "GRADLE_EXIT_STATUS=$status"
+          echo "status=$status" >> "$GITHUB_OUTPUT"
           exit $status
 
-      - name: Publish failure details
-        if: steps.gradle_build.outputs.gradle_exit != '0'
+      - name: Post failure log
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
         run: |
           set -x
-          # Хвост лога -> step summary (виден в check run через API)
+          ls -la
+          if [ -f build.log ]; then
+            tail -c 28000 build.log > tail.log
+          else
+            echo "build.log was NOT created" > tail.log
+          fi
           {
-            echo "### Gradle build failed"
-            echo '<details><summary>build log tail</summary>'
-            echo
+            echo "### CI build log ($GITHUB_SHA, run $GITHUB_RUN_ID)"
             echo '```'
-            tail -c 24000 build.log
-            echo
+            cat tail.log
             echo '```'
-            echo '</details>'
-          } >> "$GITHUB_STEP_SUMMARY"
-          # И одной error-аннотацией (переводы строк кодируются как %0A)
-          python3 - <<'PY'
-          import os, urllib.parse
-          log = open('build.log', encoding='utf-8', errors='replace').read()[-9000:]
-          msg = urllib.parse.quote(log, safe='')[:30000]
-          with open(os.environ['GITHUB_ENV'], 'a') as f:
-              f.write(f"ERRMSG={msg}\n")
-          PY
-          echo "::error title=Gradle build failed::%0A${ERRMSG}"
-          exit 1
+          } > comment.md
+          PR=$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$GITHUB_REF_NAME" --state open --json number -q '.[0].number')
+          if [ -n "$PR" ]; then
+            gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body-file comment.md
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "CI build failed at $GITHUB_SHA" --body-file comment.md
+          fi
+
+      - name: Upload build artifacts
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: CustomGuiReworked
+          path: build/libs/
+          retention-days: 30
