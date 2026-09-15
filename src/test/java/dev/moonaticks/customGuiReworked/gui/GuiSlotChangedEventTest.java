@@ -157,8 +157,9 @@ class GuiSlotChangedEventTest {
             // Функциональный диспетчер вызван до внешних слушателей
             verify(dispatcher).onSlotChanged(holder, event);
         }
+        String encodedNew = Codecs.encode(newItem);
         verify(storage).updateSlot(any(StorageKey.class),
-                org.mockito.Mockito.eq(13), org.mockito.Mockito.eq(Codecs.encode(newItem)));
+                org.mockito.Mockito.eq(13), org.mockito.Mockito.eq(encodedNew));
     }
 
     @Test
@@ -334,7 +335,13 @@ class GuiSlotChangedEventTest {
 
         dev.moonaticks.customGuiReworked.api.GuiServiceImpl service =
                 new dev.moonaticks.customGuiReworked.api.GuiServiceImpl(plugin);
-        boolean ok = service.produceResult(inv, Map.of(22, produced));
+        boolean ok;
+        org.bukkit.scheduler.BukkitScheduler scheduler = mock(org.bukkit.scheduler.BukkitScheduler.class);
+        try (MockedStatic<Bukkit> bukkit = mockStatic(Bukkit.class)) {
+            // BukkitRunnable.runTask → Bukkit.getScheduler()
+            bukkit.when(Bukkit::getScheduler).thenReturn(scheduler);
+            ok = service.produceResult(inv, Map.of(22, produced));
+        }
 
         assertTrue(ok);
         assertTrue(holder.isReconcileQueued(),
