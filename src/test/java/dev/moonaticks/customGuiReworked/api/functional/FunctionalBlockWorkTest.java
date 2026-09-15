@@ -141,6 +141,7 @@ class FunctionalBlockWorkTest {
         registry.loadData(dataDir);
         registry.setWorking("custom_pot", block, true);
         registry.data("custom_pot", block).setInt("cook", 10);
+        when(world.isChunkLoaded(0, 0)).thenReturn(true);
 
         BlockHookDispatcher dispatcher = new BlockHookDispatcher(plugin, null, null);
         try (MockedStatic<Bukkit> bukkit = mockStatic(Bukkit.class)) {
@@ -185,6 +186,7 @@ class FunctionalBlockWorkTest {
 
         registry.loadData(dataDir);
         registry.setWorking("custom_pot", block, true);
+        when(world.isChunkLoaded(0, 0)).thenReturn(true);
 
         BlockHookDispatcher dispatcher = new BlockHookDispatcher(plugin, null, null);
         try (MockedStatic<Bukkit> bukkit = mockStatic(Bukkit.class)) {
