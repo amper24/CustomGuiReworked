@@ -127,9 +127,10 @@ class CraftingRecipeTest {
         ItemStack actual = mockItem(Material.IRON_ORE, 1);
         when(actual.isSimilar(needed)).thenReturn(true);
 
+        ItemStack dirt = mockItem(Material.DIRT, 1);
         Inventory inv = mock(Inventory.class);
         when(inv.getItem(13)).thenReturn(actual);
-        when(inv.getItem(14)).thenReturn(mockItem(Material.DIRT, 1)); // лишний
+        when(inv.getItem(14)).thenReturn(dirt); // лишний
 
         CraftingRecipe recipe = CraftingRecipe.simple(Map.of(13, needed), Map.of(22, mockItem(Material.IRON_INGOT, 1)), 600);
         assertFalse(recipe.matches(inv, gui), "лишний предмет в CRAFT-слоте");
