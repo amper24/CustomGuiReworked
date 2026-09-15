@@ -35,7 +35,7 @@ CustomGuiReworked — это не только «окна с предметам�
 ## Минимальный пример: «первый GUI за 10 строк»
 
 ```java
-// build.gradle: compileOnly 'com.github.amper24:CustomGuiReworked:2.3.0'
+// build.gradle: compileOnly 'com.github.amper24:CustomGuiReworked:2.4.0'
 // plugin.yml:    softdepend: [CustomGuiReworked]
 
 @Override

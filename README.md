@@ -2,7 +2,7 @@
 
 Skeleton-based GUI framework для **Paper 26.2** (Java 25): визуальный in-game редактор, высокопроизводительное хранилище, интеграция кастомных блоков (ItemsAdder + CraftEngine) и готовый публичный API как библиотека.
 
-> **Версия:** `2.3.0` — см. [`build.gradle`](build.gradle) и [`gradle.properties`](gradle.properties)
+> **Версия:** `2.4.0` — см. [`build.gradle`](build.gradle) и [`gradle.properties`](gradle.properties)
 
 ---
 
@@ -229,8 +229,8 @@ integration:
 
 ### Подключение зависимости
 
-CustomGuiReworked публикуется через **JitPack** — он собирает jar прямо из GitHub по тегу. Файл [`jitpack.yml`](jitpack.yml) указывает JDK 25. Артефакт доступен как `com.github.amper24:CustomGuiReworked:<version>`. Версию бери из [`build.gradle`](build.gradle) `version = '2.3.0'` или из релизов GitHub. Можно указывать:
-- конкретный тег: `2.3.0`, `2.2.0`
+CustomGuiReworked публикуется через **JitPack** — он собирает jar прямо из GitHub по тегу. Файл [`jitpack.yml`](jitpack.yml) указывает JDK 25. Артефакт доступен как `com.github.amper24:CustomGuiReworked:<version>`. Версию бери из [`build.gradle`](build.gradle) `version = '2.4.0'` или из релизов GitHub. Можно указывать:
+- конкретный тег: `2.4.0`, `2.2.0`
 - короткий хеш коммита: `a1b2c3d`
 - ветку: `main-SNAPSHOT` (последний коммит main, кэшируется на 24ч)
 
@@ -269,7 +269,7 @@ dependencies {
     compileOnly("io.papermc.paper:paper-api:26.2.build.123-stable")
 
     // CustomGuiReworked — только для компиляции
-    compileOnly("com.github.amper24:CustomGuiReworked:2.3.0")
+    compileOnly("com.github.amper24:CustomGuiReworked:2.4.0")
 
     // Для тестов (если нужны) — отдельно, как в этом проекте:
     testCompileOnly("io.papermc.paper:paper-api:26.2.build.123-stable")
@@ -317,7 +317,7 @@ repositories {
 
 dependencies {
     compileOnly 'io.papermc.paper:paper-api:26.2.build.123-stable'
-    compileOnly 'com.github.amper24:CustomGuiReworked:2.3.0'
+    compileOnly 'com.github.amper24:CustomGuiReworked:2.4.0'
 
     testCompileOnly 'io.papermc.paper:paper-api:26.2.build.123-stable'
     testImplementation 'org.junit.jupiter:junit-jupiter:6.0.3'
@@ -372,7 +372,7 @@ shadowJar {
         <maven.compiler.target>25</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <paper.version>26.2.build.123-stable</paper.version>
-        <cgui.version>2.3.0</cgui.version>
+        <cgui.version>2.4.0</cgui.version>
     </properties>
 
     <repositories>
@@ -469,26 +469,26 @@ mvn clean package -U   # -U форсит проверку JitPack
 
 Если нет доступа к Maven-репозиториям:
 
-1. Скачай `CustomGuiReworked-2.3.0.jar` из релизов GitHub в папку `libs/` твоего проекта.
+1. Скачай `CustomGuiReworked-2.4.0.jar` из релизов GitHub в папку `libs/` твоего проекта.
 2. Подключи:
 
 **Gradle Kotlin:**
 ```kotlin
 dependencies {
-    compileOnly(files("libs/CustomGuiReworked-2.3.0.jar"))
+    compileOnly(files("libs/CustomGuiReworked-2.4.0.jar"))
 }
 ```
 
 **Gradle Groovy:**
 ```groovy
 dependencies {
-    compileOnly files('libs/CustomGuiReworked-2.3.0.jar')
+    compileOnly files('libs/CustomGuiReworked-2.4.0.jar')
 }
 ```
 
 **Maven (system scope — не рекомендуется, лучше install):**
 ```bash
-mvn install:install-file -Dfile=libs/CustomGuiReworked-2.3.0.jar -DgroupId=com.github.amper24 -DartifactId=CustomGuiReworked -Dversion=2.3.0 -Dpackaging=jar
+mvn install:install-file -Dfile=libs/CustomGuiReworked-2.4.0.jar -DgroupId=com.github.amper24 -DartifactId=CustomGuiReworked -Dversion=2.4.0 -Dpackaging=jar
 ```
 А потом зависимость как выше с `provided`.
 
@@ -538,7 +538,7 @@ public void onEnable() {
 
 | Что указать | Пример | Когда использовать |
 |---|---|---|
-| Релиз-тег | `2.3.0` | Продакшн, стабильно |
+| Релиз-тег | `2.4.0` | Продакшн, стабильно |
 | Предыдущий релиз | `2.2.0` | Если нужна совместимость |
 | Коммит | `a1b2c3d` (7 символов) | Тест фикса до релиза |
 | Ветка | `main-SNAPSHOT` | Разработка, всегда последний main |
@@ -558,7 +558,7 @@ public void onEnable() {
 - **`IllegalStateException: service not registered`** — ты вызываешь API до включения CustomGuiReworked. Решение: `softdepend` + вызов из `onEnable`, а не из конструктора / static init.
 - **`ClassNotFoundException: GuiService`** — забыл `compileOnly` зависимость или не добавил JitPack репозиторий.
 - **Jar вырос на 5+ MB** — ты зашейдил CustomGuiReworked. Проверь `compileOnly` / `provided` и `shadowJar { exclude }`.
-- **JitPack 401 / не находит артефакт** — первая сборка ещё идёт. Открой https://jitpack.io/com/github/amper24/CustomGuiReworked/2.3.0/build.log и дождись `Build OK`.
+- **JitPack 401 / не находит артефакт** — первая сборка ещё идёт. Открой https://jitpack.io/com/github/amper24/CustomGuiReworked/2.4.0/build.log и дождись `Build OK`.
 - **`UnsupportedClassVersionError`** — собираешь под Java 25, а сервер на Java 21. Этот плагин требует **Java 25** — см. [`jitpack.yml`](jitpack.yml) и `targetJavaVersion = 25` в [`build.gradle`](build.gradle).
 
 ### Доступ к сервису
@@ -875,7 +875,7 @@ CustomGuiReworked/
 - `./gradlew runServer` — Paper 26.2 тестовый сервер (плагин `xyz.jpenilla.run-paper`)
 - `./gradlew test` — 150 тестов, см. [`src/test/`](src/test/java/dev/moonaticks/customGuiReworked/)
 
-Публикация: JitPack по тегу — `com.github.amper24:CustomGuiReworked:2.3.0` (первая сборка ~1-2 мин).
+Публикация: JitPack по тегу — `com.github.amper24:CustomGuiReworked:2.4.0` (первая сборка ~1-2 мин).
 
 ---
 

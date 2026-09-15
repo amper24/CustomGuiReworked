@@ -50,7 +50,7 @@
 
 ```java
 // build.gradle
-compileOnly 'com.github.amper24:CustomGuiReworked:2.3.0'   // JitPack
+compileOnly 'com.github.amper24:CustomGuiReworked:2.4.0'   // JitPack
 
 // plugin.yml
 // softdepend: [CustomGuiReworked]

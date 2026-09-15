@@ -5,7 +5,7 @@ in-game редактор, оптимизированное хранилище, �
 (ItemsAdder + CraftEngine), публичный API как библиотека и готовый
 скриптовый инструментарий (Skript + Denizen).
 
-Версия: **2.3.0** (см. `build.gradle` в репозитории).
+Версия: **2.4.0** (см. `build.gradle` в репозитории).
 
 ## Навигация
 
@@ -33,11 +33,11 @@ in-game редактор, оптимизированное хранилище, �
 3. `/gui open mygui` — открыть.
 4. Скриптить без Java: Skript (`on cgui ...`, `set cgui ...`) или
    Denizen (`on cgui ...`, `<cgui...>`, `adjust`) — см. [Skript и Denizen](scripts.md).
-5. Писать плагин-интеграцию: `compileOnly 'com.github.amper24:CustomGuiReworked:2.3.0'`
+5. Писать плагин-интеграцию: `compileOnly 'com.github.amper24:CustomGuiReworked:2.4.0'`
    (JitPack) + `softdepend` — см. [API возможности](api.md) и
    [API.md](https://github.com/amper24/CustomGuiReworked/blob/main/API.md).
 
-## Главное в 2.3.0
+## Главное в 2.4.0
 
 - **Локальные оверрайды (per-зритель)**: название и дизайн слотов можно
   подменять только для одного игрока — стрелки прогресса, огонь, уровни
