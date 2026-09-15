@@ -559,3 +559,134 @@ integration:
    инвентари, только из основного потока; дисковый слой сам асинхронный.
 5. **Вшивание классов в jar (shade)** — так не нужно: это
    `compileOnly`/`provided`, плагин предоставляет API на рантайме.
+## 14. Локальные оверрайды (per-viewer)
+
+Для каждого открытого инвентаря (сессии) можно временно подменить
+название окна и предметы в DESIGN/RESULT слотах — только для этого
+конкретного игрока, без изменения файла GUI и без влияния на других
+игроков/блоки. Оверрайды живут в holder'е сессии, очищаются при
+закрытии GUI и никогда не пишутся в файл.
+
+```java
+// Название — только для этого игрока (legacy § цвета поддерживаются)
+CustomGuiAPI.setLocalTitle(player, "§6Печь [" + block.getBlockX() + "]");
+String title = CustomGuiAPI.getLocalTitle(player);
+CustomGuiAPI.clearLocalTitle(player);
+
+// Дизайн — предметы в DESIGN/RESULT слотах
+CustomGuiAPI.setLocalDesign(player, 4, progressItem);
+CustomGuiAPI.setLocalDesigns(player, Map.of(10, fluid1, 11, fluid2));
+ItemStack cur = CustomGuiAPI.getLocalDesign(player, 4);
+CustomGuiAPI.clearLocalDesign(player, 4);
+CustomGuiAPI.clearAllLocalDesigns(player);
+
+// Пер-блок + пер-плеер (для функциональных блоков)
+CustomGuiAPI.setLocalDesign(player, blockLocation, 4, progressItem);
+CustomGuiAPI.setLocalTitle(player, blockLocation, "§bБочка 70%");
+
+// Интроспекция
+Location block = CustomGuiAPI.getOpenBlockLocation(player); // null, если не BLOCK
+List<Player> viewers = CustomGuiAPI.getViewers(blockLocation);
+
+// Утилита: подготовить предмет как дизайн (maxStackSize + PDC, анти-дюп)
+ItemStack safe = CustomGuiAPI.prepareDesignItem(item);
+```
+
+Слоты `CONTAINER`/`CRAFT`/`FUEL` для оверрайдов недоступны
+(`IllegalArgumentException`) — их содержимое персистится в хранилище,
+и виртуальный предмет мог стать реальным (риск дюпа). Анти-дюп защита
+дизайна (PDC-маркер + `maxStackSize`) и `rescueDesignItems` учитывают
+локальные оверрайды: чужой предмет из DESIGN-слота возвращается
+игроку, а на место встает именно локальный «ожидаемый» предмет.
+
+Локальный заголовок, заданный до `player.openInventory`
+(например, в `GuiOpenEvent` или `onOpen` функционального блока),
+применяется точно; если окно уже открыто, применяется через
+`InventoryView#setWindowTitle` (когда метод есть в сборке Paper),
+иначе — при следующем открытии.
+
+---
+
+## 15. Функциональные блоки (печь, верстак, бочка, генератор)
+
+Пакет `api/functional` — база для «умных» блоков, где GUI ведёт
+собственную логику: локальный title/design, крафты, топливо,
+анимации прогресса.
+
+```java
+// Печь с топливом и прогрессом в DESIGN-слоте 4
+FunctionalBlock.builder("custom_furnace")
+    .gui("furnace")                                    // GUI, который открывает блок
+    .canOpen((player, block) -> player.hasPermission("furnace.use"))
+    .onOpen((player, block, inv) -> {
+        // окno ещё не показано — сюда удобно сетаить локальный title/design
+        CustomGuiAPI.setLocalTitle(player,
+                "§6Печь " + block.getBlockX() + "," + block.getBlockZ());
+        CustomGuiAPI.setLocalDesign(player, 4, progressItem(0));
+    })
+    .onClick((player, block, slot, type, event) -> {
+        // до внешних слушателей GuiSlotClickEvent;
+        // event.setInteractionCancelled(true) — ванильный клик отменится
+    })
+    .onClose((player, block) -> saveProgress(block))
+    .onTick((block, inv) -> {
+        // каждые 5 тиков, per-зритель
+        int progress = getProgress(block);
+        for (Player viewer : CustomGuiAPI.getViewers(block)) {
+            CustomGuiAPI.setLocalDesign(viewer, 4, progressItem(progress));
+        }
+    })
+    .craftingRecipe(CraftingRecipe.simple(
+            Map.of(13, new ItemStack(Material.IRON_ORE)),   // CRAFT слот
+            Map.of(22, new ItemStack(Material.IRON_INGOT)), // RESULT слот
+            600))                                            // 30 секунд
+    .fuelConsumption(Map.of(14, 1))                          // FUEL слот → 1 шт.
+    .register();                                              // ID блока → GUI + реестр
+```
+
+Методы `GuiService` для крафта/топлива/результата:
+
+```java
+boolean ok   = CustomGuiAPI.matchesCraft(inventory, recipe);   // CRAFT = ингредиентам
+int consumed = CustomGuiAPI.consumeFuel(inventory, 1);         // расход FUEL-слотов
+boolean gave = CustomGuiAPI.produceResult(inventory,
+        Map.of(22, new ItemStack(Material.IRON_INGOT)));       // все-or-nothing в RESULT
+```
+
+Событие `GuiCraftEvent` — когда игрок кликает по RESULT-слоту, а в
+GUI есть заполненные CRAFT-слоты (крафт потенциально валиден);
+отмена запрещает забирание предмета.
+
+При разрушении блока: открытые GUI закрываются, локальные оверрайды
+зрителей очищаются, сохранённые предметы выпадают, вызывается
+`onBlockBroken(block)`, per-блок анимации останавливаются.
+
+---
+
+## 16. Анимация дизайн-слотов
+
+`DesignAnimation` крутит кадры (ItemStack) в DESIGN/RESULT слотах
+через локальные оверрайды — файл GUI не затрагивается, другие игроки
+и блоки видят обычный дизайн из файла.
+
+```java
+DesignAnimation flame = DesignAnimation.builder()
+        .slots(4)                          // DESIGN слот(ы)
+        .frames(List.of(f1, f2, f3, f4))   // кадры
+        .intervalTicks(5)                  // тиков между кадрами
+        .loop(true)                         // по кругу (по умолчанию)
+        .build();
+
+flame.start(player);                       // per-плеер: свой прогресс в своём GUI
+flame.startForBlock(blockLocation);        // per-блок: общий прогресс для всех зрителей
+flame.startForViewersOfBlock(blockLocation); // alias
+flame.stopForPlayer(player);
+flame.stopForBlock(blockLocation);
+flame.stop();                              // всё
+```
+
+Авто-стоп: закрытие инвентаря сессии (per-блок — когда зрителей не
+осталось), разрушение блока, конец кадров без `loop(true)`, явный
+`stop()`.
+
+---
