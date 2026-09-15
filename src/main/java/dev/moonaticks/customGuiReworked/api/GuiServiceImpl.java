@@ -454,6 +454,10 @@ public class GuiServiceImpl implements GuiService {
                 current.setAmount(current.getAmount() + produced.getAmount());
             }
         }
+        // Результат «появился» — это изменение, достойное
+        // GuiSlotChangedEvent (и обновления baseline).
+        holder.addAllCandidates();
+        plugin.opener().scheduleReconcile(holder);
         return true;
     }
 

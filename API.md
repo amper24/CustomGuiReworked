@@ -383,8 +383,48 @@ public void onDrag(GuiDragEvent event) {
 Drag по DESIGN/RESULT слотам фреймворк отменяет ещё до события —
 подписчики получают только допустимые операции.
 
-Все четыре события также продублированы для Skript и Denizen
-(раздел 10).
+### GuiSlotChangedEvent — предмет в слоте изменился (с «было/стало»)
+
+Главная точка для запуска крафта/топлива/анимаций **от действий игрока**:
+
+```java
+@EventHandler
+public void onSlotChanged(GuiSlotChangedEvent event) {
+    if (event.getSlotType() != SlotType.CRAFT) return;
+    ItemStack before = event.getOldItem(); // null — слот был пуст
+    ItemStack after = event.getNewItem();  // null — слот стал пуст
+    // after — ФАКТУЧЕСКОЕ содержимое слота, изменения уже применены
+}
+```
+
+Чем отличается от `GuiSlotClickEvent`:
+
+| | `GuiSlotClickEvent` | `GuiSlotChangedEvent` |
+|---|---|---|
+| Когда | в момент клика (инвентарь ещё старый) | **на следующий тик**, после применения |
+| Что видит | click type, cursor, hotbar | **предметы «было/стало»**, итог любых действий |
+| Запускается от | клика/драга | клика, драга, shift-click, выдачи/сбора, `produceResult`, `consumeFuel` |
+| Слоты | только верхний инвентарь | CONTAINER/CRAFT/FUEL/**RESULT** (не DESIGN) |
+| Отмена | да (команды/клик) | нет (информационное) |
+
+События:
+
+- вызываются по каждому изменившемуся слоту на следующий тик
+  (реконсиляция по baseline — та же, что пишет в хранилище), поэтому
+  несколько быстрых кликов дают финальный диф, а не серию;
+- НЕ вызываются для локальных дизайн-оверрайдов (`setLocalDesign`,
+  анимации, прогресс-предметы в RESULT из `onTick`) — baseline
+  синхронизируется вместе с ними;
+- `getGui()` — GUI сессии; `getInventory()` — инвентарь; `getPlayer()` —
+  игрок сессии (может быть null при програмном закрытии);
+- для функциональных блоков тот же вызов доступен колбэком
+  `.onItemChanged(...)` (раздел 15) — он срабатывает **до** внешних
+  слушателей этого события;
+- для TEMPORARY-хранилища событие тоже вызывается (персистентность не
+  требуется);
+- Skript/Denizen-дублей у события нет — оно программное API; для
+  скриптов используйте `GuiSlotClickEvent` (раздел 10) или
+  `onItemChanged` в функциональном блоке (раздел 15).
 
 ---
 
@@ -642,7 +682,7 @@ FunctionalBlock.builder("custom_furnace")
     .gui("furnace")                                    // GUI, который открывает блок
     .canOpen((player, block) -> player.hasPermission("furnace.use"))
     .onOpen((player, block, inv) -> {
-        // окno ещё не показано — сюда удобно сетаить локальный title/design
+        // окно ещё не показано — сюда удобно сетаить локальный title/design
         CustomGuiAPI.setLocalTitle(player,
                 "§6Печь " + block.getBlockX() + "," + block.getBlockZ());
         CustomGuiAPI.setLocalDesign(player, 4, progressItem(0));
@@ -650,6 +690,18 @@ FunctionalBlock.builder("custom_furnace")
     .onClick((player, block, slot, type, event) -> {
         // до внешних слушателей GuiSlotClickEvent;
         // event.setInteractionCancelled(true) — ванильный клик отменится
+    })
+    .onItemChanged((player, block, slot, type, oldItem, newItem) -> {
+        // ФАКТУЧЕСКИЕ предметы «было/стало» (null — пустой слот),
+        // следующий тик после действия игрока — идеально для крафта:
+        if (type == SlotType.CRAFT) {
+            startOrUpdateCraft(block);            // заложили/убрали ингредиент
+        } else if (type == SlotType.FUEL && oldItem != null && newItem == null) {
+            refuelIfNeeded(block);                // топливо закончилось
+        } else if (type == SlotType.RESULT
+                && oldItem != null && newItem == null) {
+            consumeFuel(block, 1);                // результат забрали → расход
+        }
     })
     .onClose((player, block) -> saveProgress(block))
     .onTick((block, inv) -> {
@@ -680,9 +732,17 @@ boolean gave = CustomGuiAPI.produceResult(inventory,
 GUI есть заполненные CRAFT-слоты (крафт потенциально валиден);
 отмена запрещает забирание предмета.
 
+**Реакция на действия игрока** — `onItemChanged` (см. выше) или
+`GuiSlotChangedEvent` (раздел 7) с предметами «было/стало»: это
+готовая точка, чтобы запускать/останавливать крафт от CRAFT-слотов,
+реагировать на расход FUEL и на забирание RESULT. Логика запуска:
+CRAFT изменился → проверить `matchesCraft` → крафт пошёл;
+RESULT: предмет → пусто → результат забрали, расходовать топливо и
+ингредиенты.
+
 При разрушении блока: открытые GUI закрываются, локальные оверрайды
 зрителей очищаются, сохранённые предметы выпадают, вызывается
-`onBlockBroken(block)`, per-блок анимации останавливаются.
+`onBlockBroken(block)`, per-блок анимации останавлируются.
 
 ---
 

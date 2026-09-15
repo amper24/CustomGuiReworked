@@ -5,6 +5,7 @@ import dev.moonaticks.customGuiReworked.api.event.GuiSlotClickEvent;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
+import org.bukkit.inventory.ItemStack;
 
 import java.util.Collections;
 import java.util.Map;
@@ -82,6 +83,33 @@ public interface FunctionalBlockHandler {
      * обработано; локальные оверрайды уже очищены.
      */
     default void onClose(Player player, Location block) {
+    }
+
+    /**
+     * Содержимое слота изменилось (игрок положил/забрал/перенёс предмет,
+     * либо плагин сделал {@code produceResult}/{@code consumeFuel}).
+     *
+     * <p>Вызывается на следующий тик, когда изменения уже применены:
+     * {@code oldItem}/{@code newItem} — фактические предметы «было/стало»
+     * (null — пустой слот). Это удобная точка для запуска крафта:
+     * <pre>{@code
+     * .onItemChanged((player, block, slot, type, oldItem, newItem) -> {
+     *     if (type == SlotType.CRAFT) {
+     *         startOrUpdateCraft(block);                    // заложили/убрали ингредиент
+     *     }
+     *     if (type == SlotType.RESULT && oldItem != null && newItem == null) {
+     *         consumeFuelAndIngredients(block);             // результат забрали
+     *     }
+     * })}
+     * </pre>
+     *
+     * <p>Вызывается ДО внешних слушателей
+     * {@link dev.moonaticks.customGuiReworked.api.event.GuiSlotChangedEvent}.
+     * Анимации/локальные оверрайды DESIGN и RESULT-слотов события не
+     * генерируют (baseline синхронизируется вместе с ними).
+     */
+    default void onItemChanged(Player player, Location block, int slot, SlotType type,
+                               ItemStack oldItem, ItemStack newItem) {
     }
 
     /**

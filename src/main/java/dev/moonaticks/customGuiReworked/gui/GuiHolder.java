@@ -13,6 +13,7 @@ import org.bukkit.scheduler.BukkitTask;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 
 /**
  * Holder для открытых инвентарей GUI.
@@ -49,6 +50,16 @@ public class GuiHolder implements InventoryHolder {
         return type == SlotType.CONTAINER || type == SlotType.CRAFT || type == SlotType.FUEL;
     }
 
+    /**
+     * Типы слотов, чьё содержимое отслеживается для
+     * {@link dev.moonaticks.customGuiReworked.api.event.GuiSlotChangedEvent}:
+     * персистентные слоты + RESULT (изменения в них — действия игрока,
+     * хотя и не персистятся). DESIGN не отслеживается.
+     */
+    public static boolean isTracked(SlotType type) {
+        return isPersistable(type) || type == SlotType.RESULT;
+    }
+
     /** Типы слотов, допустимые для локальных дизайн-оверрайдов. */
     private static boolean allowsLocalDesign(SlotType type) {
         return type == SlotType.DESIGN || type == SlotType.RESULT;
@@ -72,6 +83,8 @@ public class GuiHolder implements InventoryHolder {
     private String localTitleOverride;
     /** Локация блока для BLOCK-сессий; null для остальных типов. */
     private Location blockLocation;
+    /** Игрок, для которого открыта сессия (для событий изменения слотов). */
+    private UUID player;
 
     public GuiHolder(Gui gui, StorageKey key) {
         this.gui = gui;
@@ -84,6 +97,16 @@ public class GuiHolder implements InventoryHolder {
 
     public StorageKey key() {
         return key;
+    }
+
+    /** Игрок, для которого открыта сессия (запоминается при открытии). */
+    public UUID player() {
+        return player;
+    }
+
+    /** Запоминает игрока сессии (вызывается при открытии). */
+    public void setPlayer(UUID player) {
+        this.player = player;
     }
 
     void attach(Inventory inventory) {

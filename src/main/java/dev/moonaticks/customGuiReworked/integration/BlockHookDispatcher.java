@@ -5,6 +5,7 @@ import dev.moonaticks.customGuiReworked.api.Gui;
 import dev.moonaticks.customGuiReworked.api.SlotType;
 import dev.moonaticks.customGuiReworked.api.StorageType;
 import dev.moonaticks.customGuiReworked.api.animation.DesignAnimation;
+import dev.moonaticks.customGuiReworked.api.event.GuiSlotChangedEvent;
 import dev.moonaticks.customGuiReworked.api.event.GuiSlotClickEvent;
 import dev.moonaticks.customGuiReworked.api.functional.FunctionalBlockHandler;
 import dev.moonaticks.customGuiReworked.api.functional.FunctionalBlockRegistry;
@@ -147,6 +148,30 @@ public class BlockHookDispatcher {
                 handler.onClick(player, block, slot, type, event);
             } catch (Exception e) {
                 plugin.getLogger().warning("FunctionalBlockHandler.onClick('" + handler.getGuiName()
+                        + "') failed: " + e.getMessage());
+            }
+        }
+    }
+
+    /**
+     * Вызывается из {@code GuiOpener.reconcile} (на следующий тик, когда
+     * изменения уже применены): колбэк {@code onItemChanged} обработчика
+     * по каждому изменившемуся слоту BLOCK-сессии.
+     */
+    public void onSlotChanged(GuiHolder holder, GuiSlotChangedEvent event) {
+        if (holder.key().type() != StorageType.BLOCK) {
+            return;
+        }
+        Location block = StorageKey.blockLocation(holder.key().owner());
+        if (block == null) {
+            return;
+        }
+        for (FunctionalBlockHandler handler : plugin.functionalBlocks().handlersForGui(holder.gui().name())) {
+            try {
+                handler.onItemChanged(event.getPlayer(), block, event.getSlot(), event.getSlotType(),
+                        event.getOldItem(), event.getNewItem());
+            } catch (Exception e) {
+                plugin.getLogger().warning("FunctionalBlockHandler.onItemChanged('" + handler.getGuiName()
                         + "') failed: " + e.getMessage());
             }
         }

@@ -7,6 +7,7 @@ import dev.moonaticks.customGuiReworked.api.StorageType;
 import dev.moonaticks.customGuiReworked.api.animation.DesignAnimation;
 import dev.moonaticks.customGuiReworked.api.event.GuiCloseEvent;
 import dev.moonaticks.customGuiReworked.api.event.GuiOpenEvent;
+import dev.moonaticks.customGuiReworked.api.event.GuiSlotChangedEvent;
 import dev.moonaticks.customGuiReworked.codec.Codecs;
 import dev.moonaticks.customGuiReworked.lang.LanguageManager;
 import dev.moonaticks.customGuiReworked.storage.BlockStorageBackend;
@@ -176,6 +177,7 @@ public class GuiOpener {
         String[] stored = key.type() == StorageType.TEMPORARY ? null : storage.load(key);
 
         GuiHolder holder = new GuiHolder(gui, key);
+        holder.setPlayer(player.getUniqueId());
         if (key.type() == StorageType.BLOCK) {
             // Запоминаем блок сессии: из параметра открытия, иначе — из owner-ключа.
             holder.setBlockLocation(blockLocation != null && blockLocation.getWorld() != null
@@ -190,7 +192,7 @@ public class GuiOpener {
         if (stored != null) {
             applyStorage(inventory, gui, stored);
         }
-        holder.initBaseline(snapshotPersistable(inventory, gui));
+        holder.initBaseline(snapshotTracked(inventory, gui));
 
         GuiOpenEvent event = new GuiOpenEvent(player, gui, inventory, key);
         Bukkit.getPluginManager().callEvent(event);
@@ -271,11 +273,16 @@ public class GuiOpener {
         }
     }
 
-    /** Кодирует персистентные слоты; не-персистентные позиции = null. */
-    private String[] snapshotPersistable(Inventory inventory, Gui gui) {
+    /**
+     * Снимок отслеживаемых слотов (персистентные + RESULT;
+     * не-отслеживаемые позиции = null). Результат используется как
+     * baseline для записи в хранилище И для
+     * {@link GuiSlotChangedEvent}.
+     */
+    private String[] snapshotTracked(Inventory inventory, Gui gui) {
         String[] snapshot = new String[gui.slots()];
         for (int i = 0; i < gui.slots(); i++) {
-            if (GuiHolder.isPersistable(gui.slotType(i))) {
+            if (GuiHolder.isTracked(gui.slotType(i))) {
                 snapshot[i] = Codecs.encode(inventory.getItem(i));
             }
         }
@@ -376,6 +383,18 @@ public class GuiOpener {
             inventory.setItem(slot, defaultForSlot(holder, slot));
         } else {
             inventory.setItem(slot, DesignItems.prepare(item));
+        }
+        // «Виртуальные» изменения RESULT-слота (локальный результат/прогресс
+        // из анимаций и onTick) синхронизируем в baseline: иначе при
+        // ближайшей реконсиляции они выглядели бы как чужое изменение и
+        // генерировали бы GuiSlotChangedEvent с виртуальным предметом.
+        // Реальное действие игрока (например, забрал результат) по-прежнему
+        // даст событие: текущее содержимое больше не совпадёт с baseline.
+        if (holder.gui().slotType(slot) == SlotType.RESULT) {
+            String[] baseline = holder.baseline();
+            if (baseline != null && slot < baseline.length) {
+                baseline[slot] = Codecs.encode(inventory.getItem(slot));
+            }
         }
     }
 
@@ -482,18 +501,21 @@ public class GuiOpener {
     }
 
     /**
-     * Сравнивает текущее содержимое персистентных слотов с baseline
-     * и пишет в хранилище только изменившиеся слоты.
+     * Сравнивает текущее содержимое отслеживаемых слотов (персистентные
+     * + RESULT) с baseline: изменившиеся персистентные слоты пишет в
+     * хранилище, а по каждому изменившемуся слоту вызывает
+     * {@link GuiSlotChangedEvent} (с предметами «было/стало»).
      *
-     * @param candidates null — проверить все персистентные слоты;
+     * <p>Вызывается на следующий тик после кликов/драгов (когда Bukkit
+     * уже применил изменения) и при закрытии — поэтому событие видит
+     * ФАКТУЧЕСКОЕ состояние инвентаря, в отличие от {@code GuiSlotClickEvent}.
+     *
+     * @param candidates null — проверить все отслеживаемые слоты;
      *                   иначе только перечисленные
      */
     public void reconcile(GuiHolder holder, Collection<Integer> candidates) {
         Gui gui = holder.gui();
         rescueDesignItems(holder);
-        if (holder.key().type() == StorageType.TEMPORARY) {
-            return;
-        }
         Inventory inventory = holder.getInventory();
         if (inventory == null) {
             return;
@@ -502,8 +524,10 @@ public class GuiOpener {
         if (baseline == null) {
             return;
         }
+        boolean persist = holder.key().type() != StorageType.TEMPORARY;
         for (int i = 0; i < gui.slots(); i++) {
-            if (!GuiHolder.isPersistable(gui.slotType(i))) {
+            SlotType type = gui.slotType(i);
+            if (!GuiHolder.isTracked(type)) {
                 continue;
             }
             if (candidates != null && !candidates.contains(i)) {
@@ -511,11 +535,32 @@ public class GuiOpener {
             }
             String encoded = Codecs.encode(inventory.getItem(i));
             String before = i < baseline.length ? baseline[i] : null;
-            if (!java.util.Objects.equals(encoded, before == null ? "" : before)) {
-                storage.updateSlot(holder.key(), i, encoded);
-                baseline[i] = encoded;
+            if (java.util.Objects.equals(encoded, before == null ? "" : before)) {
+                continue; // не изменилось
             }
+            if (persist && GuiHolder.isPersistable(type)) {
+                storage.updateSlot(holder.key(), i, encoded);
+            }
+            baseline[i] = encoded;
+            fireSlotChanged(holder, gui, inventory, i, before, encoded);
         }
+    }
+
+    /**
+     * Вызывает {@link GuiSlotChangedEvent} для изменившегося слота.
+     * Предметы «было/стало» восстанавливаются из baseline/текущего
+     * содержимого (null — пустой слот).
+     */
+    private void fireSlotChanged(GuiHolder holder, Gui gui, Inventory inventory, int slot,
+                                 String before, String after) {
+        UUID playerId = holder.player();
+        Player player = playerId == null ? null : Bukkit.getPlayer(playerId);
+        GuiSlotChangedEvent event = new GuiSlotChangedEvent(player, gui, inventory, slot,
+                gui.slotType(slot), Codecs.decode(before), Codecs.decode(after));
+        // Функциональный обработчик блока — до внешних слушателей
+        // (как в кликах: он может использовать актуальное содержимое).
+        plugin.dispatcher().onSlotChanged(holder, event);
+        Bukkit.getPluginManager().callEvent(event);
     }
 
     /**
