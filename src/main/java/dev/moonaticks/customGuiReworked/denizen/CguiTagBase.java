@@ -1,5 +1,7 @@
 package dev.moonaticks.customGuiReworked.denizen;
 
+import com.denizenscript.denizen.objects.ItemTag;
+import com.denizenscript.denizen.objects.LocationTag;
 import com.denizenscript.denizen.objects.PlayerTag;
 import com.denizenscript.denizencore.objects.core.ElementTag;
 import com.denizenscript.denizencore.objects.core.ListTag;
@@ -7,6 +9,8 @@ import com.denizenscript.denizencore.tags.PseudoObjectTagBase;
 import com.denizenscript.denizencore.tags.TagManager;
 import dev.moonaticks.customGuiReworked.CustomGuiReworked;
 import dev.moonaticks.customGuiReworked.api.Gui;
+import dev.moonaticks.customGuiReworked.api.functional.FunctionalBlockData;
+import org.bukkit.Location;
 
 /**
  * Pseudo-object «cgui» для тегов Denizen.
@@ -104,6 +108,115 @@ public class CguiTagBase extends PseudoObjectTagBase<CguiTagBase> {
                     : plugin.opener().guiOf(player.getPlayerEntity().getUniqueId());
             return new ElementTag(gui == null ? "none" : gui.name());
         });
+
+        // <--[tag]
+        // @attribute <cgui.block_of[<player>]>
+        // @returns LocationTag
+        // @plugin CustomGuiReworked
+        // @description Returns the location of the functional block whose GUI
+        // the player has open right now (empty if the GUI is not a block-GUI).
+        // -->
+        tagProcessor.registerTag(LocationTag.class, PlayerTag.class, "block_of", (attribute, object, player) -> {
+            Location loc = player == null || player.getPlayerEntity() == null
+                    ? null
+                    : plugin.service() == null ? null : plugin.service().getOpenBlockLocation(player.getPlayerEntity());
+            return loc == null ? null : new LocationTag(loc);
+        });
+
+        // <--[tag]
+        // @attribute <cgui.viewers[<location>]>
+        // @returns ListTag(PlayerTag)
+        // @plugin CustomGuiReworked
+        // @description Returns the players who have the GUI of this block open right now.
+        // -->
+        tagProcessor.registerTag(ListTag.class, LocationTag.class, "viewers", (attribute, object, location) -> {
+            Location loc = location == null ? null : location.asLocation();
+            if (loc == null || plugin.service() == null) {
+                return null;
+            }
+            ListTag list = new ListTag();
+            plugin.service().getViewers(loc)
+                    .forEach(p -> list.addObject(new PlayerTag(p)));
+            return list;
+        });
+
+        // <--[tag]
+        // @attribute <cgui.working[<location>]>
+        // @returns ElementTag(Boolean)
+        // @plugin CustomGuiReworked
+        // @description Returns true if the functional block at this location
+        // is "working" (its server logic ticks even without open GUIs).
+        // -->
+        tagProcessor.registerTag(ElementTag.class, LocationTag.class, "working", (attribute, object, location) -> {
+            Location loc = location == null ? null : location.asLocation();
+            return new ElementTag(loc != null && plugin.service() != null
+                    && plugin.service().isWorking(loc));
+        });
+
+        // <--[tag]
+        // @attribute <cgui.block_item[<location>,<slot>]>
+        // @returns ItemTag
+        // @plugin CustomGuiReworked
+        // @description Returns the item stored in a functional block's persistent
+        // slot (works even when the GUI is closed; empty if the slot is empty).
+        // -->
+        tagProcessor.registerTag(ItemTag.class, LocationTag.class, ElementTag.class, "block_item",
+                (attribute, object, location, slot) -> {
+                    Location loc = location == null ? null : location.asLocation();
+                    if (loc == null || slot == null || plugin.service() == null) {
+                        return null;
+                    }
+                    int s;
+                    try {
+                        s = Integer.parseInt(slot.asString().trim());
+                    } catch (NumberFormatException e) {
+                        return null;
+                    }
+                    org.bukkit.inventory.ItemStack item = plugin.service().getBlockSlotItem(loc, s);
+                    return item == null ? null : new ItemTag(item);
+                });
+
+        // <--[tag]
+        // @attribute <cgui.block_data[<location>,<key>]>
+        // @returns ElementTag
+        // @plugin CustomGuiReworked
+        // @description Returns a value from the functional block's persistent data.
+        // The block id is resolved via CraftEngine.
+        // -->
+        tagProcessor.registerTag(ElementTag.class, LocationTag.class, ElementTag.class, "block_data",
+                (attribute, object, location, key) -> {
+                    Location loc = location == null ? null : location.asLocation();
+                    if (loc == null || key == null || plugin.service() == null) {
+                        return new ElementTag("");
+                    }
+                    FunctionalBlockData data = plugin.service().blockData(loc);
+                    if (data == null) {
+                        return new ElementTag("");
+                    }
+                    String v = data.getString(key.asString(), "");
+                    return new ElementTag(v);
+                });
+
+        // <--[tag]
+        // @attribute <cgui.block_data[<location>,<blockid>,<key>]>
+        // @returns ElementTag
+        // @plugin CustomGuiReworked
+        // @description Same as <cgui.block_data[<location>,<key>]>, but with an
+        // explicit functional block id instead of CraftEngine resolution.
+        // -->
+        tagProcessor.registerTag(ElementTag.class, LocationTag.class, ElementTag.class, ElementTag.class,
+                "block_data", (attribute, object, location, blockId, key) -> {
+                    Location loc = location == null ? null : location.asLocation();
+                    if (loc == null || blockId == null || key == null || plugin.service() == null) {
+                        return new ElementTag("");
+                    }
+                    FunctionalBlockData data = plugin.service().blockData(blockId.asString(), loc);
+                    if (data == null) {
+                        return new ElementTag("");
+                    }
+                    String v = data.getString(key.asString(), "");
+                    return new ElementTag(v);
+                });
     }
 
     private Gui lookup(ElementTag name) {

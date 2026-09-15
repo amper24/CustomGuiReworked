@@ -1,10 +1,15 @@
 package dev.moonaticks.customGuiReworked.api;
 
+import dev.moonaticks.customGuiReworked.api.functional.CraftingRecipe;
+import dev.moonaticks.customGuiReworked.api.functional.FunctionalBlockData;
+import dev.moonaticks.customGuiReworked.api.functional.FunctionalBlockRegistry;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -154,4 +159,201 @@ public interface GuiService {
 
     /** Очищает данные хранилища. */
     void deleteStorage(StorageType type, String owner, String table);
+
+    // ================= локальные оверрайды (per-viewer) =================
+    //
+    // Методы работают с GUI, который игрок открыл прямо сейчас:
+    // подменяют название/дизайн только для этой сессии — файл GUI,
+    // другие игроки и другие блоки не затрагиваются. Все оверрайды
+    // очищаются при закрытии GUI и никогда не пишутся в файл
+    // (пока не вызван saveGui() с явными изменениями GUI).
+
+    /**
+     * Устанавливает локальное название окна открытого GUI игрока.
+     * Поддерживает legacy-коды цвета (§) как и заголовок из файла.
+     *
+     * <p>Если окно уже открыто на сервере, где заголовок окна
+     * неизменяем, название применится при следующем открытии GUI.
+     *
+     * @param title название; null — вернуть название из файла
+     */
+    void setLocalTitle(Player player, String title);
+
+    /** Локальное название окна, либо null (используется название из файла). */
+    String getLocalTitle(Player player);
+
+    /** Возвращает открытому GUI игрока название из файла. */
+    void clearLocalTitle(Player player);
+
+    /**
+     * Устанавливает локальный предмет в DESIGN/RESULT слот открытого GUI.
+     *
+     * @param player игрок
+     * @param slot   DESIGN/RESULT слот
+     * @param item   предмет; null — сбросить оверрайд (вернуть дизайн из файла)
+     * @throws IllegalArgumentException если GUI не открыт для игрока и слот
+     *                                 не DESIGN/RESULT
+     */
+    void setLocalDesign(Player player, int slot, ItemStack item);
+
+    /**
+     * Устанавливает сразу несколько локальных предметов (все валидируются
+     * до применения; слоты — DESIGN/RESULT).
+     */
+    void setLocalDesigns(Player player, Map<Integer, ItemStack> slots);
+
+    /** Сбрасывает локальный предмет одного слота (возвращает дизайн из файла). */
+    void clearLocalDesign(Player player, int slot);
+
+    /** Сбрасывает все локальные предметы сессии. */
+    void clearAllLocalDesigns(Player player);
+
+    /** Локальный предмет слота, либо null (показывается дизайн из файла). */
+    ItemStack getLocalDesign(Player player, int slot);
+
+    /**
+     * Пер-блок + пер-плеер: устанавливает локальный предмет для GUI,
+     * который {@code player} открыл на блоке {@code block}.
+     * (Хранилище BLOCK уже ключится по «world:x,y,z» — метод просто
+     * не даёт ошибиться с сессией.)
+     */
+    void setLocalDesign(Player player, Location block, int slot, ItemStack item);
+
+    /**
+     * Пер-блок + пер-плеер: локальное название для GUI, открытый
+     * {@code player} на блоке {@code block}.
+     */
+    void setLocalTitle(Player player, Location block, String title);
+
+    // ================= утилиты =================
+
+    /**
+     * Готовит предмет к размещению как дизайн: клонирует, ставит
+     * {@code maxStackSize} равным количеству и скрытый PDC-маркер
+     * (анти-дюп: ванильная механика не влечёт/не сливает такие предметы).
+     *
+     * @return подготовленный клон; null для AIR/null
+     */
+    ItemStack prepareDesignItem(ItemStack item);
+
+    /**
+     * Локация блока, на котором игрок открыл GUI прямо сейчас
+     * (для BLOCK-хранилища), либо null.
+     */
+    Location getOpenBlockLocation(Player player);
+
+    /**
+     * Все онлайн-игроки, у которых прямо сейчас открыт GUI на блоке.
+     */
+    List<Player> getViewers(Location block);
+
+    // ================= крафт / топливо / результат =================
+
+    /**
+     * Соответствует ли содержимое инвентаря рецепту крафта
+     * (CRAFT-слоты против {@link CraftingRecipe#getIngredients()}).
+     *
+     * @param inventory инвентарь GUI (с holder'ом плагина)
+     * @param recipe    рецепт
+     * @return true, если рецепт валиден
+     */
+    boolean matchesCraft(Inventory inventory, CraftingRecipe recipe);
+
+    /**
+     * Расходует до {@code amount} предметов из FUEL-слотов инвентаря
+     * (в порядке слотов) и планирует запись изменений в хранилище.
+     *
+     * @return сколько реально было расходу
+     */
+    int consumeFuel(Inventory inventory, int amount);
+
+    /**
+     * Выдаёт результаты в RESULT-слоты «как есть» (не локально):
+     * предмет появляется в инвентаре и доступен игроку.
+     *
+     * <p>Все-or-nothing: сначала проверяются все слоты (целевой слот —
+     * RESULT, пустой либо similar с запасом под стек), и только если
+     * всё влезает — предметы ставятся.
+     *
+     * @param inventory инвентарь GUI (с holder'ом плагина)
+     * @param results   RESULT-слоты: слот → предмет
+     * @return true, если все результаты выдааны
+     */
+    boolean produceResult(Inventory inventory, Map<Integer, ItemStack> results);
+
+    // ================= функциональные блоки =================
+
+    /**
+     * Реестр функциональных блоков (печь/верстак/бочка/генератор).
+     * Удобный вход — {@link FunctionalBlock#builder(String)}
+     * или {@code CustomGuiAPI.functionalBlock(String)}.
+     */
+    FunctionalBlockRegistry getFunctionalBlocks();
+
+    /**
+     * Предмет из персистентного слота блока (CRAFT/FUEL/CONTAINER/RESULT)
+     * — работает <b>даже когда GUI закрыт</b> (читает хранилище).
+     *
+     * @return предмет либо null (пустой слот / блок не функциональный /
+     *         слот не отслеживаемый)
+     */
+    ItemStack getBlockSlotItem(Location block, int slot);
+
+    /**
+     * Записывает предмет в персистентный слот блока, когда GUI может быть
+     * закрыт: данные уходят в хранилище, а у открытых зрителей
+     * инвентарь перерисовывается и вызывается
+     * {@link dev.moonaticks.customGuiReworked.api.event.GuiSlotChangedEvent}
+     * (oldItem = прежнее содержимое).
+     *
+     * <p>Типичное применение — результат, готовый без зрителя:
+     * {@code setBlockSlotItem(block, 24, new ItemStack(Material.IRON_INGOT))}.
+     *
+     * @param item null/AIR — слот очищается
+     * @return false, если блок не функциональный, GUI не найден
+     *         или слот не отслеживаемый (DESIGN)
+     */
+    boolean setBlockSlotItem(Location block, int slot, ItemStack item);
+
+    /**
+     * Снимает {@code amount} предметов из слота блока (null, когда GUI
+     * закрыт); последние предметы слот очищают.
+     *
+     * @return сколько предметов снято (0 — слот пуст / не функциональный)
+     */
+    int consumeBlockSlotItem(Location block, int slot, int amount);
+
+    /**
+     * Персистентные данные блока (прогресс/флаги/произвольные значения) —
+     * см. {@link FunctionalBlockData}. Живут без GUI и переживают
+     * перезагрузку сервера.
+     *
+     * @param blockId ID блока, зарегистрированного как функциональный
+     * @return данные либо null (blockId не зарегистрирован)
+     */
+    FunctionalBlockData blockData(String blockId, Location block);
+
+    /**
+     * То же, что {@link #blockData(String, Location)}, но ID блока
+     * определяется по локации через CraftEngine.
+     */
+    FunctionalBlockData blockData(Location block);
+
+    /**
+     * Включает/выключает «работу» блока (см.
+     * {@link FunctionalBlockHandler#onBlockTick}): серверная логика
+     * продолжается даже когда GUI закрыт; флаг персистится.
+     *
+     * @param blockId ID блока, зарегистрированного как функциональный
+     */
+    void setWorking(String blockId, Location block, boolean working);
+
+    /**
+     * То же, что {@link #setWorking(String, Location, boolean)}, но ID
+     * блока определяется по локации через CraftEngine.
+     */
+    void setWorking(Location block, boolean working);
+
+    /** true, если для блока включена «работа» (onBlockTick тикает). */
+    boolean isWorking(Location block);
 }

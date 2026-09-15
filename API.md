@@ -383,8 +383,48 @@ public void onDrag(GuiDragEvent event) {
 Drag по DESIGN/RESULT слотам фреймворк отменяет ещё до события —
 подписчики получают только допустимые операции.
 
-Все четыре события также продублированы для Skript и Denizen
-(раздел 10).
+### GuiSlotChangedEvent — предмет в слоте изменился (с «было/стало»)
+
+Главная точка для запуска крафта/топлива/анимаций **от действий игрока**:
+
+```java
+@EventHandler
+public void onSlotChanged(GuiSlotChangedEvent event) {
+    if (event.getSlotType() != SlotType.CRAFT) return;
+    ItemStack before = event.getOldItem(); // null — слот был пуст
+    ItemStack after = event.getNewItem();  // null — слот стал пуст
+    // after — ФАКТУЧЕСКОЕ содержимое слота, изменения уже применены
+}
+```
+
+Чем отличается от `GuiSlotClickEvent`:
+
+| | `GuiSlotClickEvent` | `GuiSlotChangedEvent` |
+|---|---|---|
+| Когда | в момент клика (инвентарь ещё старый) | **на следующий тик**, после применения |
+| Что видит | click type, cursor, hotbar | **предметы «было/стало»**, итог любых действий |
+| Запускается от | клика/драга | клика, драга, shift-click, выдачи/сбора, `produceResult`, `consumeFuel` |
+| Слоты | только верхний инвентарь | CONTAINER/CRAFT/FUEL/**RESULT** (не DESIGN) |
+| Отмена | да (команды/клик) | нет (информационное) |
+
+События:
+
+- вызываются по каждому изменившемуся слоту на следующий тик
+  (реконсиляция по baseline — та же, что пишет в хранилище), поэтому
+  несколько быстрых кликов дают финальный диф, а не серию;
+- НЕ вызываются для локальных дизайн-оверрайдов (`setLocalDesign`,
+  анимации, прогресс-предметы в RESULT из `onTick`) — baseline
+  синхронизируется вместе с ними;
+- `getGui()` — GUI сессии; `getInventory()` — инвентарь; `getPlayer()` —
+  игрок сессии (может быть null при програмном закрытии);
+- для функциональных блоков тот же вызов доступен колбэком
+  `.onItemChanged(...)` (раздел 15) — он срабатывает **до** внешних
+  слушателей этого события;
+- для TEMPORARY-хранилища событие тоже вызывается (персистентность не
+  требуется);
+- Skript/Denizen-дублей у события нет — оно программное API; для
+  скриптов используйте `GuiSlotClickEvent` (раздел 10) или
+  `onItemChanged` в функциональном блоке (раздел 15).
 
 ---
 
@@ -472,7 +512,55 @@ close the cgui of player
 `all cgui names`, `the cgui size of "shop"`,
 `the cgui title of "shop"`, `the cgui storage of "shop"`,
 `the cgui item at slot 3 from "shop" for player`,
-`all the cgui items from "shop" for player`.
+`all the cgui items from "shop" for player`,
+`%location% is cgui working`.
+
+#### Слот-изменения, локальные оверрайды и работа блока (Skript)
+
+Главное для «умных» блоков из скрипта — событие `cgui slot changed`
+(предмет положен/забран/перенесён; на следующий тик, предметы
+фактические):
+
+```skript
+on cgui slot changed:
+    # контекст: event-player, event-string (имя GUI), event-number (слот),
+    #           event-location (блок, если блок-GUI),
+    #           cgui old item of event / cgui new item of event
+    event-string is "cooking_pot"
+    if event-number is 1, 2, 3, 10, 11, or 12:
+        # заложили/убрали ингредиент: запустить/остановить работу
+        set cgui working of event-location to true
+```
+
+Полный набор (раздел 17 — как это складывается):
+
+```skript
+# Локальные оверрайды (стрелка/огонь/прогресс, ванильные и кастомные предметы):
+set cgui local design of player at slot 5 to arrow stage item
+set cgui local title of player to "&bКотёл 42%"
+clear cgui local designs of player
+
+# «Работа» блока (варка без открытого GUI; ID блока — через CraftEngine):
+set cgui working of location to true
+if location is cgui working:
+    # ...
+
+# Данные блока (прогресс/флаги; с явным ID — второй вариант):
+set cgui block data of location key "cook" to "42"
+set cgui block data of location id "farmersdelight:cooking_pot" key "cook" to "42"
+do something with cgui block data of location key "cook"
+
+# Слоты блока (при закрытом GUI; зрители перерисуются + cgui slot changed):
+set cgui block item at slot 24 of location to cooked stew
+if cgui block item at slot 24 of location is an item:
+    give player cgui block item at slot 24 of location
+
+# Прочее:
+the cgui block of player           # локация блока, GUI которого открыт
+all cgui viewers of location       # зрители блока
+cgui progress stage of 51 out of 200 in 4 frames   # индекс кадра стрелки (0..3)
+cgui old item of event / cgui new item of event    # «было/стало» в cgui slot changed
+```
 
 ### Denizen
 
@@ -488,9 +576,34 @@ on cgui drag:
 ```
 
 Контексты: `context.player`, `context.gui`, `context.slot` (click),
-`context.slots` (drag). Теги: `<cgui.guis>`, `<cgui.exists[shop]>`,
-`<cgui.size[shop]>`, `<cgui.title[shop]>`, `<cgui.storage[shop]>`,
-`<cgui.open_of[<player>]>`.
+`context.slots` (drag).
+
+#### `cgui slot changed` + механики (Denizen)
+
+```denizen
+# Игрок положил/забрал/перенёс предмет (на следующий тик, предметы фактические):
+on cgui slot changed:
+    - if <context.gui> == cooking_pot:
+        - if <context.slot> in 1, 2, 3, 10, 11, 12:
+            - cgui - set working:true at <context.block>
+        - if <context.slot_type> == result && <context.slot> == 24 && <context.new_item> is an empty item:
+            - # результат забрали — снять работу, если нечего варить
+            - cgui - set working:false at <context.block>
+
+# Стрелка прогресса / локальные оверрайды (ванильные и кастомные предметы):
+- cgui - set local design:arrow item at 5 for <player>
+- cgui - set local title:&bКотёл 42% for <player>
+- cgui - clear local design for <player>
+
+# Данные и слоты блока (при закрытом GUI):
+- cgui - set block data:cook:42 at <loc> for farmersdelight:cooking_pot
+- cgui - set block slot:cooked stew at 24 for <loc>
+- if <cgui.block_data[<loc>,cook]> > 0: ...
+- if <cgui.block_item[<loc>,24]> is an item: ...
+- if <cgui.working[<loc>]>: ...
+- <cgui.block_of[<player>]>   # локация блока, GUI которого открыт игрок
+- <cgui.viewers[<loc>]>       # зрители блока
+```
 
 ---
 
@@ -559,3 +672,306 @@ integration:
    инвентари, только из основного потока; дисковый слой сам асинхронный.
 5. **Вшивание классов в jar (shade)** — так не нужно: это
    `compileOnly`/`provided`, плагин предоставляет API на рантайме.
+## 14. Локальные оверрайды (per-viewer)
+
+Для каждого открытого инвентаря (сессии) можно временно подменить
+название окна и предметы в DESIGN/RESULT слотах — только для этого
+конкретного игрока, без изменения файла GUI и без влияния на других
+игроков/блоки. Оверрайды живут в holder'е сессии, очищаются при
+закрытии GUI и никогда не пишутся в файл.
+
+```java
+// Название — только для этого игрока (legacy § цвета поддерживаются)
+CustomGuiAPI.setLocalTitle(player, "§6Печь [" + block.getBlockX() + "]");
+String title = CustomGuiAPI.getLocalTitle(player);
+CustomGuiAPI.clearLocalTitle(player);
+
+// Дизайн — предметы в DESIGN/RESULT слотах
+CustomGuiAPI.setLocalDesign(player, 4, progressItem);
+CustomGuiAPI.setLocalDesigns(player, Map.of(10, fluid1, 11, fluid2));
+ItemStack cur = CustomGuiAPI.getLocalDesign(player, 4);
+CustomGuiAPI.clearLocalDesign(player, 4);
+CustomGuiAPI.clearAllLocalDesigns(player);
+
+// Пер-блок + пер-плеер (для функциональных блоков)
+CustomGuiAPI.setLocalDesign(player, blockLocation, 4, progressItem);
+CustomGuiAPI.setLocalTitle(player, blockLocation, "§bБочка 70%");
+
+// Интроспекция
+Location block = CustomGuiAPI.getOpenBlockLocation(player); // null, если не BLOCK
+List<Player> viewers = CustomGuiAPI.getViewers(blockLocation);
+
+// Утилита: подготовить предмет как дизайн (maxStackSize + PDC, анти-дюп)
+ItemStack safe = CustomGuiAPI.prepareDesignItem(item);
+```
+
+Слоты `CONTAINER`/`CRAFT`/`FUEL` для оверрайдов недоступны
+(`IllegalArgumentException`) — их содержимое персистится в хранилище,
+и виртуальный предмет мог стать реальным (риск дюпа). Анти-дюп защита
+дизайна (PDC-маркер + `maxStackSize`) и `rescueDesignItems` учитывают
+локальные оверрайды: чужой предмет из DESIGN-слота возвращается
+игроку, а на место встает именно локальный «ожидаемый» предмет.
+
+Локальный заголовок, заданный до `player.openInventory`
+(например, в `GuiOpenEvent` или `onOpen` функционального блока),
+применяется точно; если окно уже открыто, применяется через
+`InventoryView#setWindowTitle` (когда метод есть в сборке Paper),
+иначе — при следующем открытии.
+
+Пример — бочка с жидкостью (пустые DESIGN-слоты в файле, уровень
+показывается локально):
+
+```java
+@EventHandler
+public void onBarrelOpen(GuiOpenEvent e) {
+    if (!"barrel".equals(e.getGui().name())) {
+        return;
+    }
+    StorageKey key = e.getStorageKey();
+    if (key.type() != StorageType.BLOCK) {
+        return;
+    }
+    Location block = StorageKey.blockLocation(key.owner()); // «world:x,y,z» → Location
+    int level = getFluidLevel(block);                        // 0..100
+    CustomGuiAPI.setLocalDesigns(e.getPlayer(), Map.of(
+            10, createFluidItem(level),
+            11, createFluidItem(level),
+            12, createFluidItem(level)));
+    CustomGuiAPI.setLocalTitle(e.getPlayer(), "§bБочка " + level + "%");
+}
+```
+
+---
+
+## 15. Функциональные блоки (печь, верстак, бочка, генератор)
+
+Пакет `api/functional` — база для «умных» блоков, где GUI ведёт
+собственную логику: локальный title/design, крафты, топливо,
+анимации прогресса.
+
+```java
+// Печь с топливом и прогрессом в DESIGN-слоте 4
+FunctionalBlock.builder("custom_furnace")
+    .gui("furnace")                                    // GUI, который открывает блок
+    .canOpen((player, block) -> player.hasPermission("furnace.use"))
+    .onOpen((player, block, inv) -> {
+        // окно ещё не показано — сюда удобно сетаить локальный title/design
+        CustomGuiAPI.setLocalTitle(player,
+                "§6Печь " + block.getBlockX() + "," + block.getBlockZ());
+        CustomGuiAPI.setLocalDesign(player, 4, progressItem(0));
+    })
+    .onClick((player, block, slot, type, event) -> {
+        // до внешних слушателей GuiSlotClickEvent;
+        // event.setInteractionCancelled(true) — ванильный клик отменится
+    })
+    .onItemChanged((player, block, slot, type, oldItem, newItem) -> {
+        // ФАКТУЧЕСКИЕ предметы «было/стало» (null — пустой слот),
+        // следующий тик после действия игрока — идеально для крафта:
+        if (type == SlotType.CRAFT) {
+            startOrUpdateCraft(block);            // заложили/убрали ингредиент
+        } else if (type == SlotType.FUEL && oldItem != null && newItem == null) {
+            refuelIfNeeded(block);                // топливо закончилось
+        } else if (type == SlotType.RESULT
+                && oldItem != null && newItem == null) {
+            consumeFuel(block, 1);                // результат забрали → расход
+        }
+    })
+    .onClose((player, block) -> saveProgress(block))
+    .onTick((block, inv) -> {
+        // каждые 5 тиков, per-зритель
+        int progress = getProgress(block);
+        for (Player viewer : CustomGuiAPI.getViewers(block)) {
+            CustomGuiAPI.setLocalDesign(viewer, 4, progressItem(progress));
+        }
+    })
+    .craftingRecipe(CraftingRecipe.simple(
+            Map.of(13, new ItemStack(Material.IRON_ORE)),   // CRAFT слот
+            Map.of(22, new ItemStack(Material.IRON_INGOT)), // RESULT слот
+            600))                                            // 30 секунд
+    .fuelConsumption(Map.of(14, 1))                          // FUEL слот → 1 шт.
+    .register();                                              // ID блока → GUI + реестр
+```
+
+Методы `GuiService` для крафта/топлива/результата:
+
+```java
+boolean ok   = CustomGuiAPI.matchesCraft(inventory, recipe);   // CRAFT = ингредиентам
+int consumed = CustomGuiAPI.consumeFuel(inventory, 1);         // расход FUEL-слотов
+boolean gave = CustomGuiAPI.produceResult(inventory,
+        Map.of(22, new ItemStack(Material.IRON_INGOT)));       // все-or-nothing в RESULT
+```
+
+Событие `GuiCraftEvent` — когда игрок кликает по RESULT-слоту, а в
+GUI есть заполненные CRAFT-слоты (крафт потенциально валиден);
+отмена запрещает забирание предмета.
+
+**Реакция на действия игрока** — `onItemChanged` (см. выше) или
+`GuiSlotChangedEvent` (раздел 7) с предметами «было/стало»: это
+готовая точка, чтобы запускать/останавливать крафт от CRAFT-слотов,
+реагировать на расход FUEL и на забирание RESULT. Логика запуска:
+CRAFT изменился → проверить `matchesCraft` → крафт пошёл;
+RESULT: предмет → пусто → результат забрали, расходовать топливо и
+ингредиенты.
+**Работа без открытого GUI** (варка продолжается, когда игрок
+закрыл окно) — `onBlockTick` + `setWorking` + `blockData` +
+`setBlockSlotItem`; полный пример котла — раздел 17.
+
+
+При разрушении блока: открытые GUI закрываются, локальные оверрайды
+зрителей очищаются, сохранённые предметы, данные блока и флаг
+«работает» удаляются, вызывается `onBlockBroken(block)`,
+per-блок анимации останавливаются.
+
+---
+
+## 16. Анимация дизайн-слотов
+
+`DesignAnimation` крутит кадры (ItemStack) в DESIGN/RESULT слотах
+через локальные оверрайды — файл GUI не затрагивается, другие игроки
+и блоки видят обычный дизайн из файла.
+
+```java
+DesignAnimation flame = DesignAnimation.builder()
+        .slots(4)                          // DESIGN слот(ы)
+        .frames(List.of(f1, f2, f3, f4))   // кадры
+        .intervalTicks(5)                  // тиков между кадрами
+        .loop(true)                         // по кругу (по умолчанию)
+        .build();
+
+flame.start(player);                       // per-плеер: свой прогресс в своём GUI
+flame.startForBlock(blockLocation);        // per-блок: общий прогресс для всех зрителей
+flame.startForViewersOfBlock(blockLocation); // alias
+flame.stopForPlayer(player);
+flame.stopForBlock(blockLocation);
+flame.stop();                              // всё
+```
+
+Авто-стоп: закрытие инвентаря сессии (per-блок — когда зрителей не
+осталось), разрушение блока, конец кадров без `loop(true)`, явный
+`stop()`.
+
+---
+
+## 17. Работа блока без открытого GUI (котёл/печь варят без зрителя)
+
+Ключевая идея «умных» блоков (котёл, печь, генератор): **состояние и
+работа живут на стороне блока, а не в GUI**. Игрок закрыл окно — варка
+продолжается; открыл — видит актуальный результат. Для этого:
+
+| Что | API |
+|---|---|
+| Числа/флаги блока (прогресс, рецепта, «готово») | `CustomGuiAPI.blockData(block)` / `blockData(blockId, block)` — `FunctionalBlockData`, персистентный KV, живёт без GUI и переживает рестарт |
+| Включить/выключить серверную работу | `CustomGuiAPI.setWorking(block, true/false)`, `isWorking(block)` |
+| Серверный тик работающего блока | `.onBlockTick((block, data) -> ...)` в builder — каждые 5 тиков **без зрителей** (unloaded чанки пропускаются) |
+| Чтение/запись предметов слотов при закрытом GUI | `CustomGuiAPI.getBlockSlotItem(block, slot)`, `setBlockSlotItem(block, slot, item)` (зрители мгновенно перерисуются + `GuiSlotChangedEvent`), `consumeBlockSlotItem(block, slot, amount)` |
+| Стрелка/кадры прогресса | `DesignAnimation.stageForProgress(cook, total, frames.size())` + `setLocalDesign` (ванильные и кастомные предметы) или `DesignAnimation` для авто-цикла |
+| Зрители | `CustomGuiAPI.getViewers(block)` (уже был) |
+
+Всё это работает поверх стандартного функционального блока (раздел 15):
+`onOpen/onTick/onItemChanged` по-прежнему доступны.
+
+### Пример: котёл (в духе FarmersDelight)
+
+GUI `cooking_pot` (27 слотов): CRAFT 1,2,3,10,11,12 (ингредиенты),
+RESULT 7 (блюдо), CONTAINER 22 (миска), RESULT 24 (готовое), DESIGN 5
+(стрелка), DESIGN 20 (огонь).
+
+```java
+// onEnable:
+FunctionalBlock.builder("farmersdelight:cooking_pot")
+    .gui("cooking_pot")
+    .onOpen((player, block, inv) -> paintNow(block, player))  // отрисовать текущее состояние
+    .onTick((block, inv) -> {                                 // per-зритель, каждые 5 тиков
+        for (Player v : CustomGuiAPI.getViewers(block)) {
+            paintNow(block, v);
+        }
+    })
+    .onItemChanged((player, block, slot, type, oldItem, newItem) -> {
+        // заложили/убрали ингредиент — пере-оценить, пора ли варить
+        if (type == SlotType.CRAFT) {
+            CustomGuiAPI.setWorking(block, evaluateCookable(block));
+        }
+        if (type == SlotType.RESULT && oldItem != null && newItem == null
+                && slot == 24) {
+            // результат забрали: опыт + пере-оценка
+            player.giveExp(Math.max(1, Math.round(
+                    CustomGuiAPI.blockData(block).getDouble("xp", 0)));
+            CustomGuiAPI.setWorking(block, evaluateCookable(block));
+        }
+    })
+    .onBlockTick((block, data) -> {                            // серверная варка, БЕЗ зрителя
+        if (!isHeated(block)) {                                // печь/костёр/магма снизу — своя логика
+            data.setInt("cook", 0);
+            return;
+        }
+        Object[] recipe = findRecipe(block);                   // своя таблица рецептов
+        if (recipe == null) {
+            data.setInt("cook", 0);
+            return;
+        }
+        int cook = data.getInt("cook", 0) + 1;
+        int total = (int) recipe[5];
+        if (cook >= total) {
+            data.setInt("cook", 0);
+            data.setDouble("xp", (double) recipe[6]);
+            consumeIngredients(block, recipe);                 // через consumeBlockSlotItem
+            boolean toBowl = hasContainerRecipe(recipe);
+            if (toBowl) {
+                mergeIntoMeal(block, recipe);                  // setBlockSlotItem(7, dish)
+            } else {
+                CustomGuiAPI.setBlockSlotItem(block, 24, makeItem(recipe[3], (int) recipe[4]));
+            }
+        } else {
+            data.setInt("cook", cook);
+        }
+    })
+    .register();
+
+// отрисовка: стрелка прогресса + огонь (ванильные и кастомные предметы — без разницы)
+List<ItemStack> arrow = List.of(arrow1, arrow2, arrow3, arrow4); // CE-предметы
+void paintNow(Location block, Player viewer) {
+    FunctionalBlockData data = CustomGuiAPI.blockData(block);
+    int cook = data.getInt("cook", 0);
+    int total = data.getInt("total", 1);
+    if (cook > 0 && total > 0) {
+        int stage = DesignAnimation.stageForProgress(cook, total, arrow.size());
+        CustomGuiAPI.setLocalDesign(viewer, 5, arrow.get(stage));
+    } else {
+        CustomGuiAPI.setLocalDesign(viewer, 5, null);
+    }
+    CustomGuiAPI.setLocalDesign(viewer, 20, isHeated(block) ? fireIcon : null);
+}
+```
+
+Как это складывается:
+
+- **Зритель открыл GUI** → обычные предметы слотов (CRAFT/CONTAINER/RESULT)
+  подгружаются из персистентного хранилища блока; `onOpen`/`onTick`
+  рисуют стрелку и огонь через `setLocalDesign` (локальный оверрайд —
+  не трогает файл GUI, других зрителей и сохранённые предметы не касаются);
+- **игрок закрыл GUI** → `onBlockTick` продолжает тикать: прогресс
+  копится в `blockData`, результат появляется через
+  `setBlockSlotItem` и сохраняется;
+- **результат готов, зритель смотрит** → `setBlockSlotItem`
+  мгновенно перерисовывает его инвентарь и вызывает
+  `GuiSlotChangedEvent` (old=null → new=result) — `onItemChanged`/
+  слушатель узнают, что «результат появился»;
+- **перезагрузка сервера** → данные и флаг «работает»
+  восстанавливаются из `data/functional/<blockId>.yml` — варка
+  продолжается с того же места;
+- **блок разбили** → предметы выпадают, данные и работа удаляются,
+  `onBlockBroken` вызывается (остановить анимации и прочее).
+
+Примечания:
+
+- `setWorking(block, ...)` с `Location` находит ID блока через
+  CraftEngine; если ID известен явно — `setWorking(blockId, block, ...)`
+  (быстрее, без CE-обращения).
+- `onBlockTick` вызывается только для загруженных чанков;
+  `isHeated`-подобные проверки делайте в своём коде (Lightable/CE-state).
+- Кадры стрелки — любые `ItemStack` (ванильные `Material` и кастомные
+  CraftEngine/ItemsAdder предметы), `setLocalDesign` не различает.
+- Если анимация «время-зависимая» (пламя, пузыри), а не прогресс —
+  используйте `DesignAnimation` (раздел 16) в `onOpen`:
+  `startForBlock(block)` перерисует всех зрителей, `stopForBlock` —
+  в `onClose`.
