@@ -112,7 +112,7 @@ public final class LegacyPayloads {
             Material material = Material.matchMaterial(id);
             if (material == null) {
                 warnOnce();
-                return new ItemStack(Material.AIR);
+                return null;
             }
 
             int amount = 1;
@@ -155,7 +155,7 @@ public final class LegacyPayloads {
             }
             return item;
         } catch (Exception e) {
-            return new ItemStack(Material.AIR);
+            return null;
         }
     }
 

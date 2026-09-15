@@ -1,7 +1,9 @@
 package dev.moonaticks.customGuiReworked.storage;
 
 import dev.moonaticks.customGuiReworked.api.StorageType;
+import org.bukkit.Bukkit;
 import org.junit.jupiter.api.Test;
+import org.mockito.MockedStatic;
 
 import java.util.UUID;
 
@@ -9,6 +11,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mockStatic;
 
 class StorageKeyTest {
 
@@ -64,7 +67,10 @@ class StorageKeyTest {
         assertNull(StorageKey.blockLocation("no-colon"));
         assertNull(StorageKey.blockLocation("world:1,2"));
         assertNull(StorageKey.blockLocation("world:a,b,c"));
-        // несуществующий мир (Bukkit.getWorld вернёт null и в реальном окружении)
-        assertNull(StorageKey.blockLocation("definitely-not-a-world:1,2,3"));
+        // валидные координаты, но мир не найден (сервер не поднят в тестах)
+        try (MockedStatic<Bukkit> bukkit = mockStatic(Bukkit.class)) {
+            bukkit.when(() -> Bukkit.getWorld("definitely-not-a-world")).thenReturn(null);
+            assertNull(StorageKey.blockLocation("definitely-not-a-world:1,2,3"));
+        }
     }
 }

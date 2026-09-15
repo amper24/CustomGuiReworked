@@ -8,15 +8,23 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
+/**
+ * Юнит-тесты кодеков не поднимают сервер: ItemStack заменён моком
+ * (конструирование реального ItemStack в paper-api требует запущенного
+ * сервера с реестрами), пустые/битые payload должны давать null.
+ */
 class CodecsTest {
 
-    /** Тестовый кодек: запоминает переданный payload и возвращает воздух. */
+    /** Тестовый кодек: запоминает переданный payload. */
     static final class FakeCodec implements ItemCodec {
         String decodedPayload;
-        boolean encodeCalled;
+        ItemStack decodeResult;
 
         @Override
         public String tag() {
@@ -25,14 +33,13 @@ class CodecsTest {
 
         @Override
         public String encode(ItemStack item) {
-            encodeCalled = true;
             return "fake";
         }
 
         @Override
         public ItemStack decode(String payload) {
             decodedPayload = payload;
-            return new ItemStack(Material.AIR);
+            return decodeResult;
         }
     }
 
@@ -49,6 +56,13 @@ class CodecsTest {
         Codecs.reset();
     }
 
+    private static ItemStack mockItem(Material material, int amount) {
+        ItemStack item = mock(ItemStack.class);
+        when(item.getType()).thenReturn(material);
+        when(item.getAmount()).thenReturn(amount);
+        return item;
+    }
+
     @Test
     void activeCodecMustBeInitialized() {
         assertThrows(IllegalStateException.class, Codecs::active);
@@ -60,33 +74,52 @@ class CodecsTest {
     void nullAndAirEncodeToEmptyEvenWithoutCodec() {
         // item == null проверяется до получения активного кодека
         assertEquals("", Codecs.encode(null));
+        ItemStack air = mockItem(Material.AIR, 1);
+        Codecs.initialize(fake);
+        assertEquals("", Codecs.encode(air));
     }
 
     @Test
-    void decodeBlankIsAlwaysSafe() {
+    void realItemEncodedWithTagPrefix() {
+        Codecs.initialize(fake);
+        assertEquals("t1:fake", Codecs.encode(mockItem(Material.DIAMOND, 2)));
+    }
+
+    @Test
+    void decodeBlankIsAlwaysSafeAndEmpty() {
+        Codecs.initialize(fake);
         for (String blank : new String[]{null, "", "   ", "{}"}) {
             ItemStack item = assertDoesNotThrow(() -> Codecs.decode(blank));
-            assertNotNull(item, "декод пустого payload возвращает воздушный предмет, не null");
+            assertNull(item, "декод пустого payload должен давать null");
         }
     }
 
     @Test
     void routesByTag() {
+        ItemStack result = mockItem(Material.GOLD_INGOT, 1);
+        fake.decodeResult = result;
         Codecs.register(fake);
         ItemStack item = Codecs.decode("t1:hello-world");
-        assertNotNull(item);
+        assertSame(result, item);
         assertEquals("hello-world", fake.decodedPayload, "кодек должен получить payload без префикса");
     }
 
     @Test
+    void unknownCodecResultIsEmpty() {
+        // кодек вернул null — наружу тоже null, без падений
+        Codecs.register(fake);
+        assertNull(Codecs.decode("t1:whatever"));
+    }
+
+    @Test
     void unknownTagFallsBackToLegacyWithoutThrowing() {
-        ItemStack item = assertDoesNotThrow(() -> Codecs.decode("zz:something"));
-        assertNotNull(item);
+        assertDoesNotThrow(() -> Codecs.decode("zz:something"));
+        assertNull(Codecs.decode("zz:something"));
     }
 
     @Test
     void garbagePayloadDoesNotThrow() {
-        ItemStack item = assertDoesNotThrow(() -> Codecs.decode("not-json-at-all!!!"));
-        assertNotNull(item);
+        assertDoesNotThrow(() -> Codecs.decode("not-json-at-all!!!"));
+        assertNull(Codecs.decode("not-json-at-all!!!"));
     }
 }

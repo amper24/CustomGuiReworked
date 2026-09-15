@@ -33,6 +33,10 @@ repositories {
         name = "citizens-repo"
         url = "https://maven.citizensnpcs.co/repo"
     }
+    maven {
+        name = "jitpack"
+        url = "https://jitpack.io"
+    }
 }
 
 dependencies {
@@ -65,11 +69,19 @@ dependencies {
     // Тесты
     testImplementation(platform("org.junit:junit-bom:6.0.3"))
     testImplementation("org.junit.jupiter:junit-jupiter")
+    // Mockito — мок Bukkit-типов без запущенного сервера
+    // (ItemStack в paper-api требует реестры сервера)
+    testImplementation("org.mockito:mockito-core:5.23.0")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+    // compileOnly не попадает в testRuntimeClasspath, а тесты исполняют
+    // код, ссылающийся на Bukkit/Paper API (моки, без запущенного сервера)
+    testRuntimeOnly("io.papermc.paper:paper-api:26.2.build.123-stable")
 }
 
 tasks.test {
     useJUnitPlatform()
+    // Mockito inline-mock-maker динамически подгружает byte-buddy-агент
+    jvmArgs("-XX:+EnableDynamicAgentLoading")
     testLogging {
         events("passed", "skipped", "failed")
     }

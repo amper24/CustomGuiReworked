@@ -81,11 +81,12 @@ public final class Codecs {
     /**
      * Декодирует подписанный (или legacy) payload.
      *
-     * @return предмет или воздух
+     * @return предмет; {@code null} для пустого/битого payload
+     *         («нет предмета» — вызывающий код обязан это учитывать)
      */
     public static ItemStack decode(String payload) {
         if (payload == null || payload.isBlank() || payload.equals("{}")) {
-            return new ItemStack(Material.AIR);
+            return null;
         }
         int colon = payload.indexOf(':');
         if (colon == 2) {
@@ -95,7 +96,7 @@ public final class Codecs {
                 if (item != null && item.getType() != Material.AIR) {
                     return item;
                 }
-                return new ItemStack(Material.AIR);
+                return null;
             }
         }
         // Без тега — legacy-формат (плагин 1.x)
