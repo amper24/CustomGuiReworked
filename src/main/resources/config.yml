@@ -28,7 +28,7 @@ commands:
 # Интеграции со скриптовыми плагинами
 # (устанавливаются рядом в plugins/ — плагин сам определит их наличие)
 integration:
-  # Skript: события on cgui open/close/click, условия, выражения, действия.
+  # Skript: события on cgui open/close/click/drag, условия, выражения, действия.
   skript: true
-  # Denizen: события on cgui open/close/click, теги <cgui.*>.
+  # Denizen: события on cgui open/close/click/drag, теги <cgui.*>.
   denizen: true

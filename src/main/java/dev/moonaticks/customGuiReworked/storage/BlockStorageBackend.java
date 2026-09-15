@@ -114,6 +114,19 @@ public class BlockStorageBackend implements StorageBackend, Listener {
 
     private void loadRegion(RegionCache cache) {
         synchronized (cache.lock) {
+            // Подметаем осиротевшие tmp-файлы этого региона после краха.
+            File parent = cache.file.getParentFile();
+            if (parent != null) {
+                String prefix = cache.file.getName() + ".tmp-";
+                File[] leftovers = parent.listFiles((dir, name) -> name.startsWith(prefix));
+                if (leftovers != null) {
+                    for (File leftover : leftovers) {
+                        if (!leftover.delete()) {
+                            leftover.deleteOnExit();
+                        }
+                    }
+                }
+            }
             if (!cache.file.exists()) {
                 cache.root = new JsonObject();
                 return;

@@ -124,6 +124,16 @@ class SimpleStorageBackendTest {
     }
 
     @Test
+    void staleTmpFromCrashIsSweptOnConstruction() throws IOException {
+        folder.mkdirs();
+        Files.writeString(folder.toPath().resolve("steve_shop.yml.tmp-uuid-1"), "partial");
+        Files.writeString(folder.toPath().resolve("other.tmp-abc"), "partial");
+        new SimpleStorageBackend(null, StorageType.PERSONAL, folder, true);
+        File[] leftovers = folder.listFiles((d, name) -> name.contains(".tmp-"));
+        assertEquals(0, leftovers == null ? 0 : leftovers.length);
+    }
+
+    @Test
     void writesAreAtomicNoLeftoverTmpFiles() throws IOException {
         StorageKey key = key("steve", "shop.yml");
         for (int i = 0; i < 10; i++) {

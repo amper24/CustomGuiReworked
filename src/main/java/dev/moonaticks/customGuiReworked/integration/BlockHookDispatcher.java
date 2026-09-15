@@ -86,22 +86,42 @@ public class BlockHookDispatcher {
         Location location = block.getLocation();
         String owner = BlockStorageBackend.ownerKey(location);
 
-        // 1. Маркер + закрытие зрителей (close-событие синхронно).
-        destroyed.add(owner);
-        List<UUID> toClose = new ArrayList<>();
+        // 1. Фиксируем АКТУАЛЬНОЕ содержимое открытых инвентарей в кэше
+        //    региона ДО маркера: предмет, забранный игроком на курсор
+        //    за последнее окно коалесинга, уже не в слоте и не должен
+        //    повторно выпасть дропом (иначе дюп).
+        List<UUID> viewers = new ArrayList<>();
         openBlockKeys.forEach((uuid, key) -> {
             if (key.equals(owner)) {
-                toClose.add(uuid);
+                viewers.add(uuid);
             }
         });
-        for (UUID uuid : toClose) {
+        for (UUID uuid : viewers) {
+            Player player = Bukkit.getPlayer(uuid);
+            if (player == null || !player.isOnline()) {
+                continue;
+            }
+            org.bukkit.inventory.Inventory top =
+                    player.getOpenInventory().getTopInventory();
+            if (top.getHolder() instanceof dev.moonaticks.customGuiReworked.gui.GuiHolder holder
+                    && owner.equals(holder.key().owner())) {
+                // reconcile синхронно правит region-кэш (файл дозапишется
+                // позже фоном, а удаление ниже всё равно перезапишет кэш).
+                plugin.opener().reconcile(holder, null);
+            }
+        }
+
+        // 2. Маркер + закрытие зрителей (close-событие синхронно и уже не
+        //    пересохранит данные этого блока).
+        destroyed.add(owner);
+        for (UUID uuid : viewers) {
             Player player = Bukkit.getPlayer(uuid);
             if (player != null && player.isOnline()) {
                 player.closeInventory();
             }
         }
 
-        // 2. Дроп предметов.
+        // 3. Дроп предметов (из актуализированного кэша региона).
         List<String> payloads = plugin.storage().blockBackend().allPayloads(location);
         for (String payload : payloads) {
             ItemStack item = Codecs.decode(payload);
@@ -110,7 +130,7 @@ public class BlockHookDispatcher {
             }
         }
 
-        // 3. Удаление данных и кэша.
+        // 4. Удаление данных и кэша.
         plugin.storage().blockBackend().removeBlock(location);
         plugin.storage().removeBlockCache(owner);
         openBlockKeys.values().removeIf(owner::equals);

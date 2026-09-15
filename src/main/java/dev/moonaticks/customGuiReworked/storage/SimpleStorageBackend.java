@@ -47,6 +47,20 @@ public class SimpleStorageBackend implements StorageBackend {
         if (!folder.exists() && !folder.mkdirs()) {
             plugin.getLogger().warning("Could not create folder " + folder);
         }
+        sweepStaleTmp(folder);
+    }
+
+    /** Удаляет осиротевшие временные файлы после жёсткого краха сервера. */
+    public static void sweepStaleTmp(File folder) {
+        File[] leftovers = folder.listFiles((dir, name) -> name.contains(".tmp-"));
+        if (leftovers == null) {
+            return;
+        }
+        for (File leftover : leftovers) {
+            if (!leftover.delete()) {
+                leftover.deleteOnExit();
+            }
+        }
     }
 
     @Override

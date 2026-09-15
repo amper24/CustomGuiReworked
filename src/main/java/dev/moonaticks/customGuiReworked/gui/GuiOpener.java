@@ -113,7 +113,7 @@ public class GuiOpener {
             if (!openRequests.getOrDefault(player.getUniqueId(), -1L).equals(requestId)) {
                 return;
             }
-            finishOpen(player, gui, key);
+            finishOpen(player, gui, key, requestId);
         });
     }
 
@@ -133,7 +133,7 @@ public class GuiOpener {
         };
     }
 
-    private void finishOpen(Player player, Gui gui, StorageKey key) {
+    private void finishOpen(Player player, Gui gui, StorageKey key, long requestId) {
         String[] stored = key.type() == StorageType.TEMPORARY ? null : storage.load(key);
 
         GuiHolder holder = new GuiHolder(gui, key);
@@ -148,10 +148,12 @@ public class GuiOpener {
         GuiOpenEvent event = new GuiOpenEvent(player, gui, inventory, key);
         Bukkit.getPluginManager().callEvent(event);
         if (event.isCancelled()) {
-            openRequests.remove(player.getUniqueId());
+            // Снимаем маркер только если это всё ещё наш запрос — иначе
+            // мы бы обнулили более новый запрос и его бы посчитали устаревшим.
+            openRequests.remove(player.getUniqueId(), requestId);
             return;
         }
-        openRequests.remove(player.getUniqueId());
+        openRequests.remove(player.getUniqueId(), requestId);
         openGuis.put(player.getUniqueId(), gui);
         if (key.type() == StorageType.BLOCK) {
             plugin.dispatcher().onInventoryOpened(player, key);

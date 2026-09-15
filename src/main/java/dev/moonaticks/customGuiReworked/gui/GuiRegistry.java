@@ -8,6 +8,7 @@ import dev.moonaticks.customGuiReworked.api.SlotCommand;
 import dev.moonaticks.customGuiReworked.api.SlotType;
 import dev.moonaticks.customGuiReworked.api.StorageType;
 import dev.moonaticks.customGuiReworked.codec.LegacyPayloads;
+import dev.moonaticks.customGuiReworked.storage.SimpleStorageBackend;
 import org.bukkit.configuration.file.YamlConfiguration;
 
 import java.io.File;
@@ -78,6 +79,9 @@ public class GuiRegistry {
     public synchronized void loadAll() {
         guis.clear();
         blockIndex.clear();
+        // Осиротевшие tmp после жёсткого краха не должны накапливаться.
+        SimpleStorageBackend.sweepStaleTmp(tableDir);
+        SimpleStorageBackend.sweepStaleTmp(customDir);
         int loaded = 0;
         // tables/ загружаются первыми, custom/ (зарегистрированные
         // другими плагинами) имеют приоритет при совпадении имён —
@@ -173,18 +177,15 @@ public class GuiRegistry {
             deleteFileOf(sameName);
         }
         gui.source(persist ? Gui.Source.CUSTOM : Gui.Source.RUNTIME);
-        // Убираем файл под прежним именем/статусом:
-        //  - переименование persist-GUI — старый <oldName>.yml;
-        //  - понижение CUSTOM → RUNTIME — текущий файл.
-        if (previousSource == Gui.Source.CUSTOM) {
-            String stale = null;
-            if (oldName != null && !oldName.equals(gui.name())) {
-                stale = oldName;
-            } else if (oldName != null && !persist) {
-                stale = gui.name();
-            }
-            if (stale != null) {
-                File staleFile = new File(directoryFor(gui), stale + ".yml");
+        // Убираем осиротевший файл под прежним именем/статусом.
+        // Каталог старого файла определяется ПРЕЖНИМ source (после смены
+        // source directoryFor(gui) указывал бы уже на новую папку).
+        if (oldName != null && previousSource != Gui.Source.RUNTIME) {
+            boolean renamed = !oldName.equals(gui.name());
+            boolean becameTransient = previousSource == Gui.Source.CUSTOM && !persist;
+            if (renamed || becameTransient) {
+                File oldDir = previousSource == Gui.Source.CUSTOM ? customDir : tableDir;
+                File staleFile = new File(oldDir, oldName + ".yml");
                 if (staleFile.exists() && !staleFile.delete()) {
                     plugin.getLogger().warning("Could not delete stale GUI file " + staleFile);
                 }

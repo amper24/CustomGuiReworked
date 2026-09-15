@@ -96,6 +96,44 @@ class GuiRegistryRenameTest {
     }
 
     @Test
+    @DisplayName("понижение CUSTOM до RUNTIME удаляет файл из custom/")
+    void downgradeToRuntimeDeletesFile() {
+        File customDir = new File(tempDir.toFile(), "custom");
+        GuiRegistry registry = registry();
+        Gui gui = new Gui("shop");
+        registry.register(gui, true);
+        File file = new File(customDir, "shop.yml");
+        assertEquals(true, file.exists());
+
+        registry.register(gui, false);
+
+        assertEquals(false, file.exists(), "файл custom/shop.yml должен быть удалён");
+        assertSame(gui, registry.get("shop"));
+    }
+
+    @Test
+    @DisplayName("переименование persist-GUI с тем же source чистит старый файл в своей папке")
+    void tableRenameViaSaveDeletesOldFile() {
+        File tableDir = new File(tempDir.toFile(), "tables");
+        GuiRegistry registry = registry();
+        Gui gui = new Gui("shop");
+        registry.register(gui, false);
+        // имитируем редакторный GUI (файл в tables/)
+        gui.source(Gui.Source.TABLE);
+        registry.save(gui);
+        File oldFile = new File(tableDir, "shop.yml");
+        assertEquals(true, oldFile.exists());
+
+        gui.rename("market");
+        registry.save(gui);
+
+        assertEquals(false, oldFile.exists());
+        assertEquals(true, new File(tableDir, "market.yml").exists());
+        assertNull(registry.get("shop"));
+        assertSame(gui, registry.get("market"));
+    }
+
+    @Test
     @DisplayName("повторный register с новым именем вытесняет чужой GUI с таким именем")
     void renameOntoOccupiedName() {
         GuiRegistry registry = registry();
