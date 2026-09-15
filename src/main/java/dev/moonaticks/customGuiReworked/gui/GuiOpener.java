@@ -10,6 +10,7 @@ import dev.moonaticks.customGuiReworked.codec.Codecs;
 import dev.moonaticks.customGuiReworked.lang.LanguageManager;
 import dev.moonaticks.customGuiReworked.storage.StorageKey;
 import dev.moonaticks.customGuiReworked.storage.StorageService;
+import dev.moonaticks.customGuiReworked.util.DesignItems;
 import dev.moonaticks.customGuiReworked.util.ItemDrops;
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.bukkit.Bukkit;
@@ -166,7 +167,7 @@ public class GuiOpener {
             if (gui.slotType(i) != SlotType.DESIGN) {
                 continue;
             }
-            org.bukkit.inventory.ItemStack item = Codecs.decode(gui.designAt(i));
+            org.bukkit.inventory.ItemStack item = DesignItems.prepare(Codecs.decode(gui.designAt(i)));
             if (item != null && item.getType() != Material.AIR) {
                 inventory.setItem(i, item);
             }
@@ -202,10 +203,11 @@ public class GuiOpener {
 
     /**
      * Возвращает игрокам предметы, которые ванильная механика могла
-     * занести в дизайн-слоты (shift-перенос из нижнего инвентаря
-     * раскладывает предметы по любым слотам, в т.ч. декоративным).
-     * Если стаак «слился» с декоративным предметом — возвращается
-     * только дельта, сам дизайн восстанавливается как был.
+     * занести в дизайн-слоты (теоретически — драг по вине ванили,
+     * обход через моды и т.п.; shift-клик у нас полностью отменён).
+     * Если стак «слился» с декоративным предметом — возвращается
+     * только дельта, сам дизайн восстанавливается как был (с маркером
+     * и maxStackSize, подготовленными {@link DesignItems#prepare}).
      */
     private void rescueDesignItems(GuiHolder holder) {
         Gui gui = holder.gui();
@@ -218,19 +220,26 @@ public class GuiOpener {
                 continue;
             }
             ItemStack current = inv.getItem(i);
-            ItemStack expected = Codecs.decode(gui.designAt(i));
+            ItemStack expected = DesignItems.prepareExpected(Codecs.decode(gui.designAt(i)));
             if (current == null || current.getType() == Material.AIR) {
+                // Слот опустел (например double-click стянул дизайн на курсор) —
+                // возвращаем оформление на место. Слитый с курсором стек всё
+                // равно окажется в инвентаре игрока (это его курсор), дюпа нет.
+                inv.setItem(i, expected);
                 continue;
             }
             if (expected != null && expected.getType() != Material.AIR && current.isSimilar(expected)) {
                 int delta = current.getAmount() - expected.getAmount();
-                inv.setItem(i, expected.clone());
+                inv.setItem(i, expected);
                 if (delta > 0) {
+                    // Лишние предметы влитые в декоративный стак — возвращаем игроку.
                     giveBack(holder, new ItemStack(current.getType(), delta));
                 }
+                // При delta < 0 часть декора, гипотетически, унесли — expected
+                // уже поставлен обратно вызовом выше, этого достаточно.
             } else {
                 ItemStack moved = current.clone();
-                inv.setItem(i, expected == null ? null : expected.clone());
+                inv.setItem(i, expected);
                 giveBack(holder, moved);
             }
         }
