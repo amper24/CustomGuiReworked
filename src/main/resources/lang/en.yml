@@ -1,0 +1,180 @@
+language:
+  # ---------- Common ----------
+  noPermission: "§cYou don't have permission to do that."
+  interface:
+    broken:
+      skeleton: "§cThis interface is broken: the skeleton is not loaded correctly."
+    blockNoLocation: "§cThis GUI uses block storage, but no block was provided."
+    temporaryReturned: "§eYour temporary items were returned."
+
+  # ---------- Editor ----------
+  editor:
+    mainTitle: "§8[ⒼⓊⓘ ⒺⒹⓘⓉⓄⓇ] §f%s"
+    sizeTitle: "§eSlots: §f%s"
+    skeletonTitle: "§6Skeleton: §f%s"
+    designTitle: "§aDesign: §f%s"
+    storageTitle: "§bStorage: §f%s"
+    blocksTitle: "§dBlocks: §f%s"
+    filler: " "
+    btn:
+      size: "§eSlot count"
+      skeleton: "§6Slot types (skeleton)"
+      design: "§aDesign"
+      title: "§dTitle"
+      storage: "§bData storage"
+      preview: "§2Preview"
+      blocks: "§dCustom blocks"
+      back: "§cBack"
+      delete: "§cDelete this GUI"
+    info:
+      name: "§fSummary"
+      size: "§7Size: §f%s"
+      storage: "§7Storage: §f%s"
+      type: "§7%s: §f%d"
+      commands: "§7Commands: §f%s"
+      blocks: "§7Bound blocks: §f%s"
+    size:
+      option: "§f%s slots"
+    skeleton:
+      hint1: "§7Click — switch type"
+      hint2: "§7Shift-Click — set Design"
+    design:
+      empty: "§7Empty"
+      locked: "§cLocked (skeleton slot)"
+      lockedClick: "§cThis slot is part of the skeleton. Use §6Slot types §cto change it."
+    blocks:
+      add: "§eAdd block ID"
+      removeHint: "§7Right-Click — unbind"
+    titlePrompt: "§eSend the new GUI title in chat. §c/cancel §eto abort."
+    blockPrompt: "§eSend the custom block ID in chat (ItemsAdder/CraftEngine). §c/cancel §eto abort."
+    promptCancelled: "§cPrompt cancelled."
+    promptTimeout: "§cPrompt timed out."
+    titleSet: "§aTitle set: §f%s"
+    blockAdded: "§aBlock bound: §f%s"
+    blockRemoved: "§aBlock unbound: §f%s"
+    blockAlready: "§eBlock already bound: §f%s"
+    sizeChanged: "§aSize set to: §f%s slots."
+    storageChanged: "§aStorage set to: §f%s."
+    saved: "§aDesign saved."
+    deleted: "§aGUI §f%s §adeleted."
+
+  # ---------- Slot types ----------
+  slot:
+    design: "§aDesign"
+    container: "§bContainer"
+    craft: "§6Craft"
+    result: "§eResult"
+    fuel: "§cFuel"
+
+  # ---------- Storage types ----------
+  storage:
+    block:
+      name: "§eBlock storage"
+      desc: "§7Data is saved to the block (world, x, y, z). Breaking the block drops the items."
+    personal:
+      name: "§ePlayer storage"
+      desc: "§7Every player has their own copy."
+    global:
+      name: "§eGlobal storage"
+      desc: "§7All players share one storage."
+    team:
+      name: "§eTeam storage"
+      desc: "§7Players in the same Bukkit team share one storage."
+    temporary:
+      name: "§eTemporary (not saved)"
+      desc: "§7Nothing is saved. Items are returned when the GUI is closed."
+    current: " §a(current)"
+
+  # ---------- Management menu ----------
+  manager:
+    title:
+      list: "§8[ⒼⓊⓘ ⓂⒺ⒩⒰⒢ⓄⓇ] §fGUI list"
+      options: "§8[ⒼⓊⓘ ⓂⒺ⒩⒰⒢ⓄⓇ] §fGUI: §f%s"
+    filler: " "
+    btn:
+      search: "§bSearch"
+      searchHint: "§7Type in chat to search by name."
+      create: "§eNew GUI"
+      createHint: "§7Click and enter the name in chat."
+      reload: "§6Reload all"
+      reloadHint: "§7Re-read all GUI files."
+      status: "§fStatus"
+      prev: "§e◀ Previous page"
+      next: "§eNext page ▶"
+      page: "§fPage §6%s/%s"
+    status:
+      count: "§7GUIs: §f%s"
+      search: "§7Search: §f%s"
+      noSearch: "§7No active search"
+    gui:
+      title: "§8Title: §f%s"
+      size: "§8Size: §f%s"
+      storage: "§8Storage: §f%s"
+      blocks: "§8Bound blocks: §f%s"
+      commands: "§8Slot commands: §f%s"
+      source:
+        table: "§8Source: §fEditor (tables/)"
+        custom: "§8Source: §fPlugin (custom/)"
+        runtime: "§8Source: §fMemory (runtime)"
+      hint:
+        open: "§7Left-Click — §fopen"
+        edit: "§7Middle-Click — §fedit"
+        options: "§7Right-Click — §foptions"
+    createPrompt: "§eSend the new GUI name in chat. §c/cancel §eto abort."
+    searchPrompt: "§eType a GUI name to search in chat. §c/cancel §eto abort."
+    inputCancelled: "§cInput cancelled."
+    created: "§aGUI §f%s §acreated — opening the editor."
+    reloadDone: "§aAll GUIs reloaded."
+    deleteArmed: "§cClick §fDelete §cagain within 5 seconds to confirm."
+    deleted: "§cGUI §f%s §cdeleted."
+    nameInvalid: "§cInvalid name: letters, digits, dashes and underscores only (up to 32 chars)."
+    exists: "§cA GUI with this name already exists."
+    notFound: "§cGUI not found."
+    options:
+      preview: "§2Open (preview)"
+      previewHint: "§7Opens the GUI — data is loaded and saved as usual."
+      edit: "§6Edit"
+      editHint: "§7Opens the GUI editor."
+      reload: "§bReload from file"
+      reloadHint: "§7Re-read the GUI file."
+      reloadUnavailable: "§7This GUI has no file (in-memory only)."
+      reloaded: "§aGUI reloaded."
+      info: "§fDetails"
+      delete: "§cDelete"
+      deleteHint: "§7Deletes the GUI and its file."
+      deleteHint2: "§7Storage data is kept."
+      back: "§cBack"
+
+  # ---------- Commands ----------
+  cmd:
+    playersOnly: "§cThis command can only be run by players."
+    usage: "§cUsage: §f/gui [create|edit|open|delete|list|command|reload] §8— §7no args opens the management menu"
+    create:
+      usage: "§cUsage: §f/gui create <name>"
+      done: "§aGUI §f%s §a— editor opened."
+    edit:
+      usage: "§cUsage: §f/gui edit <name>"
+    open:
+      usage: "§cUsage: §f/gui open <name>"
+    delete:
+      usage: "§cUsage: §f/gui delete <name>"
+      done: "§aGUI §f%s §adeleted."
+    guiNotFound: "§cGUI not found: §f%s"
+    list:
+      header: "§eGUIs (%s):"
+      empty: "§7No GUIs exist yet."
+      item: "§8- §f%s"
+    numberRequired: "§cThat value must be a number!"
+    reload:
+      done: "§aPlugin reloaded (config, language, GUIs)."
+    cmd:
+      usage: "§cUsage: §f/gui command [add|get|delete] <slot> <gui> [delay] <command...>"
+      added: "§aCommand added to slot §f%s."
+      deleted: "§aCommand deleted from slot §f%s."
+      notFound: "§cCommand not found in slot §f%s."
+      value: "§aSlot §f%s§a: §f%s §7(delay %s)"
+      listHeader: "§aCommands for §f%s §ain slot §f%s:"
+      listItem: "§e#%s §f- %s §7(delay %s)"
+      listFooter: "§e--------------------------------"
+      emptySlot: "§7No commands in slot §f%s."
+      slotOutOfRange: "§cSlot must be in range 0..%s."

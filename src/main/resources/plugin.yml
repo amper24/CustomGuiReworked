@@ -1,0 +1,60 @@
+name: CustomGuiReworked
+version: '${version}'
+main: dev.moonaticks.customGuiReworked.CustomGuiReworked
+api-version: '1.21'
+description: 'Skeleton-based custom GUI framework: visual editor, pluggable storage, ItemsAdder & CraftEngine block support, library-ready API.'
+author: moonaticks
+website: https://github.com/amper24/CustomGuiReworked
+
+softdepend:
+  - NBTAPI
+  - ItemsAdder
+  - CraftEngine
+  - Skript
+  - Denizen
+
+commands:
+  gui:
+    description: Manage custom GUIs (no args opens the management menu)
+    usage: |
+      /gui - open management menu
+      /gui create - create a new GUI
+      /gui edit <name> - edit an existing GUI
+      /gui open <name> [player] - open a GUI
+      /gui delete <name> - delete a GUI
+      /gui list - list all GUIs
+      /gui command <bind|unbind> - manage slot commands
+      /gui reload - reload configuration
+    aliases: [cgui, customgui]
+    permission: cgui.use
+    permission-message: '&cYou do not have permission to use this command.'
+
+permissions:
+  cgui.use:
+    description: Base permission granting access to /gui
+    default: op
+    children:
+      cgui.create: true
+      cgui.edit: true
+      cgui.open: true
+      cgui.delete: true
+      cgui.reload: true
+      cgui.command: true
+  cgui.create:
+    description: Allow /gui create
+    default: op
+  cgui.edit:
+    description: Allow /gui edit
+    default: op
+  cgui.open:
+    description: Allow /gui open
+    default: op
+  cgui.delete:
+    description: Allow /gui delete
+    default: op
+  cgui.reload:
+    description: Allow /gui reload
+    default: op
+  cgui.command:
+    description: Allow /gui command (bind/unbind slot commands)
+    default: op

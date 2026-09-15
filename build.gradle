@@ -1,0 +1,160 @@
+plugins {
+    id 'java-library'
+    id 'maven-publish'
+    id 'xyz.jpenilla.run-paper' version '3.1.0'
+}
+
+group = 'dev.moonaticks'
+version = '2.2.0'
+
+repositories {
+    mavenCentral()
+    maven {
+        name = 'papermc'
+        url = 'https://repo.papermc.io/repository/maven-public/'
+    }
+    maven {
+        name = 'CodeMC'
+        url = 'https://repo.codemc.io/repository/maven-public/'
+    }
+    maven {
+        name = 'momirealms'
+        url = 'https://repo.momirealms.net/releases/'
+    }
+    maven {
+        name = 'skriptlang'
+        url = 'https://repo.skriptlang.org/releases'
+    }
+    maven {
+        name = 'citizens'
+        url = 'https://maven.citizensnpcs.co/repo'
+    }
+    maven {
+        name = 'jitpack'
+        url = 'https://jitpack.io'
+    }
+}
+
+def paperVersion = '26.2.build.123-stable'
+
+dependencies {
+    // Paper API — единственная компилируемая цель рантайма.
+    compileOnly "io.papermc.paper:paper-api:$paperVersion"
+
+    // NBTAPI — эталонный формат предметов (опционально в рантайме).
+    compileOnly 'de.tr7zw:item-nbt-api-plugin:2.16.0'
+
+    // ItemsAdder — опциональная интеграция кастомных блоков.
+    compileOnly('beer.devs:itemsadder-api:4.0.17') {
+        transitive = false
+    }
+
+    // CraftEngine — опциональная интеграция кастомных блоков.
+    compileOnly('net.momirealms:craft-engine-core:26.7.2') {
+        transitive = false
+    }
+    compileOnly('net.momirealms:craft-engine-bukkit:26.7.2') {
+        transitive = false
+    }
+
+    // Skript — опциональная скриптовая интеграция.
+    compileOnly('com.github.SkriptLang:Skript:2.15.2') {
+        transitive = false
+    }
+
+    // Denizen — опциональная скриптовая интеграция.
+    compileOnly('com.denizenscript:denizen:1.3.1-SNAPSHOT') {
+        transitive = false
+    }
+
+    // ---------- тесты ----------
+    testImplementation platform('org.junit:junit-bom:6.0.3')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testImplementation 'org.mockito:mockito-core:5.23.0'
+    testImplementation 'org.mockito:mockito-junit-jupiter:5.23.0'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+
+    // compileOnly НЕ наследуется testCompileClasspath — тесты не увидят
+    // org.bukkit.* без явного testCompileOnly. Runtime — отдельно, чтобы
+    // Mockito мог подгрузить реальные классы при исполнении.
+    testCompileOnly "io.papermc.paper:paper-api:$paperVersion"
+    testRuntimeOnly "io.papermc.paper:paper-api:$paperVersion"
+}
+
+def targetJavaVersion = 25
+java {
+    def javaVersion = JavaVersion.toVersion(targetJavaVersion)
+    sourceCompatibility = javaVersion
+    targetCompatibility = javaVersion
+    if (JavaVersion.current() < javaVersion) {
+        toolchain.languageVersion = JavaLanguageVersion.of(targetJavaVersion)
+    }
+    withSourcesJar()
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.release.set(targetJavaVersion)
+}
+
+tasks.named('test', Test) {
+    useJUnitPlatform()
+    // Mockito inline-mock-maker динамически подгружает byte-buddy-агент.
+    jvmArgs '-XX:+EnableDynamicAgentLoading'
+    testLogging {
+        events 'passed', 'skipped', 'failed'
+        exceptionFormat = 'full'
+        showStackTraces = true
+        showCauses = true
+    }
+}
+
+tasks.named('runServer', xyz.jpenilla.runpaper.task.RunServer) {
+    minecraftVersion '26.2'
+}
+
+processResources {
+    def props = [version: project.version]
+    inputs.properties props
+    filteringCharset = 'UTF-8'
+    filesMatching(['plugin.yml', 'paper-plugin.yml']) {
+        expand props
+    }
+}
+
+// ================= публикация (JitPack / Maven Local) =================
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            from components.java
+            pom {
+                name = 'CustomGuiReworked'
+                description = 'Skeleton-based custom GUI framework for Paper: visual editor, ' +
+                        'persistent block/personal/global/team storage, ItemsAdder & CraftEngine ' +
+                        'block support, Skript & Denizen integration and a library-ready API.'
+                url = 'https://github.com/amper24/CustomGuiReworked'
+                licenses {
+                    license {
+                        name = 'MIT License'
+                        url = 'https://opensource.org/licenses/MIT'
+                    }
+                }
+                developers {
+                    developer {
+                        id = 'moonaticks'
+                        name = 'moonaticks'
+                    }
+                }
+                scm {
+                    connection = 'scm:git:git://github.com/amper24/CustomGuiReworked.git'
+                    developerConnection = 'scm:git:ssh://github.com/amper24/CustomGuiReworked.git'
+                    url = 'https://github.com/amper24/CustomGuiReworked'
+                }
+                issueManagement {
+                    system = 'GitHub Issues'
+                    url = 'https://github.com/amper24/CustomGuiReworked/issues'
+                }
+            }
+        }
+    }
+}

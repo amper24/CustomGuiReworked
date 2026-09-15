@@ -1,0 +1,180 @@
+language:
+  # ---------- Общее ----------
+  noPermission: "§cУ вас нет прав для этого действия."
+  interface:
+    broken:
+      skeleton: "§cИнтерфейс повреждён: скелет загружен некорректно."
+    blockNoLocation: "§cЭтот GUI использует блок-хранилище, но блок не был указан."
+    temporaryReturned: "§eВаши временные предметы возвращены."
+
+  # ---------- Редактор ----------
+  editor:
+    mainTitle: "§8[ⒼⓊⓘ ⒺⒹⓘⓉⓄⓇ] §f%s"
+    sizeTitle: "§eСлоты: §f%s"
+    skeletonTitle: "§6Скелет: §f%s"
+    designTitle: "§aДизайн: §f%s"
+    storageTitle: "§bХранилище: §f%s"
+    blocksTitle: "§dБлоки: §f%s"
+    filler: " "
+    btn:
+      size: "§eКоличество слотов"
+      skeleton: "§6Типы слотов (скелет)"
+      design: "§aДизайн"
+      title: "§dЗаголовок"
+      storage: "§bХранилище данных"
+      preview: "§2Предпросмотр"
+      blocks: "§dКастомные блоки"
+      back: "§cНазад"
+      delete: "§cУдалить этот GUI"
+    info:
+      name: "§fСводка"
+      size: "§7Размер: §f%s"
+      storage: "§7Хранилище: §f%s"
+      type: "§7%s: §f%d"
+      commands: "§7Команд: §f%s"
+      blocks: "§7Привязано блоков: §f%s"
+    size:
+      option: "§f%s слотов"
+    skeleton:
+      hint1: "§7Клик — сменить тип"
+      hint2: "§7Shift-клик — сделать Design"
+    design:
+      empty: "§7Пусто"
+      locked: "§cЗаблокирован (слот скелета)"
+      lockedClick: "§cЭтот слот входит в скелет. Используйте §6Типы слотов§c, чтобы сменить его."
+    blocks:
+      add: "§eДобавить ID блока"
+      removeHint: "§7Правый клик — отвязать"
+    titlePrompt: "§eВведите новый заголовок GUI в чат. §c/cancel §e— отмена."
+    blockPrompt: "§eВведите ID кастомного блока в чат (ItemsAdder/CraftEngine). §c/cancel §e— отмена."
+    promptCancelled: "§cВвод отменён."
+    promptTimeout: "§cВремя ввода истекло."
+    titleSet: "§aЗаголовок установлен: §f%s"
+    blockAdded: "§aБлок привязан: §f%s"
+    blockRemoved: "§aБлок отвязан: §f%s"
+    blockAlready: "§eБлок уже привязан: §f%s"
+    sizeChanged: "§aРазмер установлен: §f%s слотов."
+    storageChanged: "§aХранилище установлено: §f%s."
+    saved: "§aДизайн сохранён."
+    deleted: "§aGUI §f%s §aудалён."
+
+  # ---------- Типы слотов ----------
+  slot:
+    design: "§aДизайн"
+    container: "§bКонтейнер"
+    craft: "§6Крафт"
+    result: "§eРезультат"
+    fuel: "§cТопливо"
+
+  # ---------- Типы хранилища ----------
+  storage:
+    block:
+      name: "§eБлок"
+      desc: "§7Данные сохраняются в блоке (мир, x, y, z). При разрушении блока предметы выпадают."
+    personal:
+      name: "§eИгрок"
+      desc: "§7У каждого игрока своя копия."
+    global:
+      name: "§eГлобальное"
+      desc: "§7Все игроки разделяют одно хранилище."
+    team:
+      name: "§eКоманда"
+      desc: "§7Игроки одной Bukkit-команды разделяют одно хранилище."
+    temporary:
+      name: "§eВременное (без сохранения)"
+      desc: "§7Ничего не сохраняется. Предметы возвращаются при закрытии."
+    current: " §a(текущее)"
+
+  # ---------- Меню управления ----------
+  manager:
+    title:
+      list: "§8[ⒼⓊⓘ ⓂⒺ⒩⒰⒢ⓄⓇ] §fСписок GUI"
+      options: "§8[ⒼⓊⓘ ⓂⒺ⒩⒰⒢ⓄⓇ] §fGUI: §f%s"
+    filler: " "
+    btn:
+      search: "§bПоиск"
+      searchHint: "§7Введите текст в чат, чтобы искать по имени."
+      create: "§eНовый GUI"
+      createHint: "§7Кликните и введите имя в чат."
+      reload: "§6Перезагрузить всё"
+      reloadHint: "§7Перечитать все файлы GUI."
+      status: "§fСтатус"
+      prev: "§e◀ Пред. страница"
+      next: "§eСтр. след. ▶"
+      page: "§fСтраница §6%s/%s"
+    status:
+      count: "§7GUI: §f%s"
+      search: "§7Поиск: §f%s"
+      noSearch: "§7Поиска нет"
+    gui:
+      title: "§8Заголовок: §f%s"
+      size: "§8Размер: §f%s"
+      storage: "§8Хранилище: §f%s"
+      blocks: "§8Привязано блоков: §f%s"
+      commands: "§8Команд слотов: §f%s"
+      source:
+        table: "§8Источник: §fРедактор (tables/)"
+        custom: "§8Источник: §fПлагин (custom/)"
+        runtime: "§8Источник: §fПамять (runtime)"
+      hint:
+        open: "§7ЛКМ — §fоткрыть"
+        edit: "§7СКМ — §fредактировать"
+        options: "§7ПКМ — §fопции"
+    createPrompt: "§eВведите имя нового GUI в чат. §c/cancel §e— отмена."
+    searchPrompt: "§eВведите часть имени GUI для поиска в чат. §c/cancel §e— отмена."
+    inputCancelled: "§cВвод отменён."
+    created: "§aGUI §f%s §асоздан — открываю редактор."
+    reloadDone: "§aВсе GUI перечитаны."
+    deleteArmed: "§cКликните по §fУдалить §cещё раз в течение 5 секунд для подтверждения."
+    deleted: "§cGUI §f%s §cудалён."
+    nameInvalid: "§cНедопустимое имя: только буквы, цифры, дефисы и подчёркивания (до 32 символов)."
+    exists: "§cGUI с таким именем уже существует."
+    notFound: "§cGUI не найден."
+    options:
+      preview: "§2Открыть (предпросмотр)"
+      previewHint: "§7Открывает GUI — данные загружаются и сохраняются как обычно."
+      edit: "§6Редактировать"
+      editHint: "§7Открывает редактор GUI."
+      reload: "§bПеречитать файл"
+      reloadHint: "§7Перечитывает файл GUI."
+      reloadUnavailable: "§7У этого GUI нет файла (только в памяти)."
+      reloaded: "§aGUI перечитан."
+      info: "§fСведения"
+      delete: "§cУдалить"
+      deleteHint: "§7Удаляет GUI и его файл."
+      deleteHint2: "§7Данные хранилища сохраняются."
+      back: "§cНазад"
+
+  # ---------- Команды ----------
+  cmd:
+    playersOnly: "§cЭту команду могут выполнять только игроки."
+    usage: "§cИспользование: §f/gui [create|edit|open|delete|list|command|reload] §8— §7без аргументов откроется меню управления"
+    create:
+      usage: "§cИспользование: §f/gui create <имя>"
+      done: "§aGUI §f%s §a— редактор открыт."
+    edit:
+      usage: "§cИспользование: §f/gui edit <имя>"
+    open:
+      usage: "§cИспользование: §f/gui open <имя>"
+    delete:
+      usage: "§cИспользование: §f/gui delete <имя>"
+      done: "§aGUI §f%s §aудалён."
+    guiNotFound: "§cGUI не найден: §f%s"
+    list:
+      header: "§eGUI (%s):"
+      empty: "§7GUI пока не созданы."
+      item: "§8- §f%s"
+    numberRequired: "§cЭто значение должно быть числом!"
+    reload:
+      done: "§aПлагин перезагружен (конфиг, язык, GUI)."
+    cmd:
+      usage: "§cИспользование: §f/gui command [add|get|delete] <слот> <gui> [задержка] <команда...>"
+      added: "§aКоманда добавлена в слот §f%s."
+      deleted: "§aКоманда удалена из слота §f%s."
+      notFound: "§cКоманда не найдена в слоте §f%s."
+      value: "§aСлот §f%s§a: §f%s §7(задержка %s)"
+      listHeader: "§aКоманды для §f%s §ав слоте §f%s:"
+      listItem: "§e#%s §f- %s §7(задержка %s)"
+      listFooter: "§e--------------------------------"
+      emptySlot: "§7В слоте §f%s §7нет команд."
+      slotOutOfRange: "§cСлот должен быть в диапазоне 0..%s."

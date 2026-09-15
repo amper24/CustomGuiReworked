@@ -1,0 +1,77 @@
+name: Build
+
+on:
+  push:
+    branches: [ main, develop, master ]
+  pull_request:
+    branches: [ main, master ]
+  release:
+    types: [ published ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v5
+        with:
+          java-version: '25'
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Build with Gradle
+        id: gradle_build
+        shell: bash
+        run: |
+          pwd
+          ls -la
+          java -version
+          set +e
+          bash ./gradlew build --no-daemon --stacktrace --console=plain 2>&1 | tee build.log
+          status=${PIPESTATUS[0]}
+          echo "GRADLE_EXIT_STATUS=$status"
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          exit $status
+
+      - name: Post failure log
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -x
+          ls -la
+          if [ -f build.log ]; then
+            tail -c 28000 build.log > tail.log
+          else
+            echo "build.log was NOT created" > tail.log
+          fi
+          {
+            echo "### CI build log ($GITHUB_SHA, run $GITHUB_RUN_ID)"
+            echo '```'
+            cat tail.log
+            echo '```'
+          } > comment.md
+          PR=$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$GITHUB_REF_NAME" --state open --json number -q '.[0].number')
+          if [ -n "$PR" ]; then
+            gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body-file comment.md
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "CI build failed at $GITHUB_SHA" --body-file comment.md
+          fi
+
+      - name: Upload build artifacts
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: CustomGuiReworked
+          path: build/libs/
+          retention-days: 30
