@@ -512,7 +512,55 @@ close the cgui of player
 `all cgui names`, `the cgui size of "shop"`,
 `the cgui title of "shop"`, `the cgui storage of "shop"`,
 `the cgui item at slot 3 from "shop" for player`,
-`all the cgui items from "shop" for player`.
+`all the cgui items from "shop" for player`,
+`%location% is cgui working`.
+
+#### Слот-изменения, локальные оверрайды и работа блока (Skript)
+
+Главное для «умных» блоков из скрипта — событие `cgui slot changed`
+(предмет положен/забран/перенесён; на следующий тик, предметы
+фактические):
+
+```skript
+on cgui slot changed:
+    # контекст: event-player, event-string (имя GUI), event-number (слот),
+    #           event-location (блок, если блок-GUI),
+    #           cgui old item of event / cgui new item of event
+    event-string is "cooking_pot"
+    if event-number is 1, 2, 3, 10, 11, or 12:
+        # заложили/убрали ингредиент: запустить/остановить работу
+        set cgui working of event-location to true
+```
+
+Полный набор (раздел 17 — как это складывается):
+
+```skript
+# Локальные оверрайды (стрелка/огонь/прогресс, ванильные и кастомные предметы):
+set cgui local design of player at slot 5 to arrow stage item
+set cgui local title of player to "&bКотёл 42%"
+clear cgui local designs of player
+
+# «Работа» блока (варка без открытого GUI; ID блока — через CraftEngine):
+set cgui working of location to true
+if location is cgui working:
+    # ...
+
+# Данные блока (прогресс/флаги; с явным ID — второй вариант):
+set cgui block data of location key "cook" to "42"
+set cgui block data of location id "farmersdelight:cooking_pot" key "cook" to "42"
+do something with cgui block data of location key "cook"
+
+# Слоты блока (при закрытом GUI; зрители перерисуются + cgui slot changed):
+set cgui block item at slot 24 of location to cooked stew
+if cgui block item at slot 24 of location is an item:
+    give player cgui block item at slot 24 of location
+
+# Прочее:
+the cgui block of player           # локация блока, GUI которого открыт
+all cgui viewers of location       # зрители блока
+cgui progress stage of 51 out of 200 in 4 frames   # индекс кадра стрелки (0..3)
+cgui old item of event / cgui new item of event    # «было/стало» в cgui slot changed
+```
 
 ### Denizen
 
@@ -528,9 +576,34 @@ on cgui drag:
 ```
 
 Контексты: `context.player`, `context.gui`, `context.slot` (click),
-`context.slots` (drag). Теги: `<cgui.guis>`, `<cgui.exists[shop]>`,
-`<cgui.size[shop]>`, `<cgui.title[shop]>`, `<cgui.storage[shop]>`,
-`<cgui.open_of[<player>]>`.
+`context.slots` (drag).
+
+#### `cgui slot changed` + механики (Denizen)
+
+```denizen
+# Игрок положил/забрал/перенёс предмет (на следующий тик, предметы фактические):
+on cgui slot changed:
+    - if <context.gui> == cooking_pot:
+        - if <context.slot> in 1, 2, 3, 10, 11, 12:
+            - cgui - set working:true at <context.block>
+        - if <context.slot_type> == result && <context.slot> == 24 && <context.new_item> is an empty item:
+            - # результат забрали — снять работу, если нечего варить
+            - cgui - set working:false at <context.block>
+
+# Стрелка прогресса / локальные оверрайды (ванильные и кастомные предметы):
+- cgui - set local design:arrow item at 5 for <player>
+- cgui - set local title:&bКотёл 42% for <player>
+- cgui - clear local design for <player>
+
+# Данные и слоты блока (при закрытом GUI):
+- cgui - set block data:cook:42 at <loc> for farmersdelight:cooking_pot
+- cgui - set block slot:cooked stew at 24 for <loc>
+- if <cgui.block_data[<loc>,cook]> > 0: ...
+- if <cgui.block_item[<loc>,24]> is an item: ...
+- if <cgui.working[<loc>]>: ...
+- <cgui.block_of[<player>]>   # локация блока, GUI которого открыт игрок
+- <cgui.viewers[<loc>]>       # зрители блока
+```
 
 ---
 

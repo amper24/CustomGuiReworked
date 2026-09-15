@@ -6,6 +6,7 @@ import dev.moonaticks.customGuiReworked.denizen.events.CguiClickScriptEvent;
 import dev.moonaticks.customGuiReworked.denizen.events.CguiCloseScriptEvent;
 import dev.moonaticks.customGuiReworked.denizen.events.CguiDragScriptEvent;
 import dev.moonaticks.customGuiReworked.denizen.events.CguiOpenScriptEvent;
+import dev.moonaticks.customGuiReworked.denizen.events.CguiSlotChangedScriptEvent;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.server.PluginDisableEvent;
@@ -72,9 +73,11 @@ public final class CguiDenizenSupport implements Listener {
             ScriptEvent.registerScriptEvent(CguiCloseScriptEvent.class);
             ScriptEvent.registerScriptEvent(CguiClickScriptEvent.class);
             ScriptEvent.registerScriptEvent(CguiDragScriptEvent.class);
+            ScriptEvent.registerScriptEvent(CguiSlotChangedScriptEvent.class);
             new CguiTagBase(plugin);
+            new CguiMechanics(plugin);
             registered = true;
-            plugin.getLogger().info("Denizen support: events and tags registered");
+            plugin.getLogger().info("Denizen support: events, tags and mechanics registered");
         } catch (Throwable t) {
             plugin.getLogger().log(Level.SEVERE, "Failed to register Denizen support", t);
         }

@@ -7,6 +7,7 @@ import ch.njol.skript.util.Getter;
 import dev.moonaticks.customGuiReworked.api.event.GuiCloseEvent;
 import dev.moonaticks.customGuiReworked.api.event.GuiDragEvent;
 import dev.moonaticks.customGuiReworked.api.event.GuiOpenEvent;
+import dev.moonaticks.customGuiReworked.api.event.GuiSlotChangedEvent;
 import dev.moonaticks.customGuiReworked.api.event.GuiSlotClickEvent;
 import org.bukkit.entity.Player;
 
@@ -31,6 +32,7 @@ public final class CguiSkriptEvents {
         Skript.registerEvent("cgui close", SimpleEvent.class, GuiCloseEvent.class, "[cgui] close");
         Skript.registerEvent("cgui click", SimpleEvent.class, GuiSlotClickEvent.class, "[cgui] click");
         Skript.registerEvent("cgui drag", SimpleEvent.class, GuiDragEvent.class, "[cgui] drag");
+        Skript.registerEvent("cgui slot changed", SimpleEvent.class, GuiSlotChangedEvent.class, "[cgui] slot changed");
 
         EventValues.registerEventValue(GuiOpenEvent.class, Player.class, new Getter<Player, GuiOpenEvent>() {
             @Override
@@ -89,5 +91,40 @@ public final class CguiSkriptEvents {
                 return event.getSlot();
             }
         }, 2);
+
+        // cgui slot changed: игрок положил/забрал/перенёс предмет (или плагин
+        // изменил слот серверно) — с предметами «было/стало».
+        EventValues.registerEventValue(GuiSlotChangedEvent.class, Player.class, new Getter<Player, GuiSlotChangedEvent>() {
+            @Override
+            public Player get(GuiSlotChangedEvent event) {
+                return event.getPlayer();
+            }
+        }, 0);
+        EventValues.registerEventValue(GuiSlotChangedEvent.class, String.class, new Getter<String, GuiSlotChangedEvent>() {
+            @Override
+            public String get(GuiSlotChangedEvent event) {
+                return event.getGui() == null ? null : event.getGui().name();
+            }
+        }, 1);
+        EventValues.registerEventValue(GuiSlotChangedEvent.class, Number.class, new Getter<Number, GuiSlotChangedEvent>() {
+            @Override
+            public Number get(GuiSlotChangedEvent event) {
+                return event.getSlot();
+            }
+        }, 2);
+        EventValues.registerEventValue(GuiSlotChangedEvent.class, org.bukkit.Location.class,
+                new Getter<org.bukkit.Location, GuiSlotChangedEvent>() {
+                    @Override
+                    public org.bukkit.Location get(GuiSlotChangedEvent event) {
+                        org.bukkit.inventory.Inventory inventory = event.getInventory();
+                        return inventory != null && inventory.getHolder() instanceof dev.moonaticks.customGuiReworked.gui.GuiHolder holder
+                                && holder.key().type() == dev.moonaticks.customGuiReworked.api.StorageType.BLOCK
+                                ? holder.blockLocation()
+                                : null;
+                    }
+                }, 3);
+        // Предметы «было/стало» — выражениями
+        // «cgui old item of %event%» / «cgui new item of %event%»
+        // (см. ExprCguiSlotItemChanged).
     }
 }

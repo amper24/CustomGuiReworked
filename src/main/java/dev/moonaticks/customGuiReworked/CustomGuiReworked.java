@@ -76,6 +76,11 @@ public final class CustomGuiReworked extends JavaPlugin {
     /** Тикер onTick функциональных блоков (каждые 5 тиков). */
     private BukkitTask functionalTickTask;
 
+    /** Публичный сервис (GuiService) плагина (используется Skript/Denizen-обёртками). */
+    public GuiService service() {
+        return registeredService;
+    }
+
     @Override
     public void onEnable() {
         saveDefaultConfig();
