@@ -220,12 +220,12 @@ public class FunctionalBlockRegistry {
             return false;
         }
         String owner = dev.moonaticks.customGuiReworked.storage.BlockStorageBackend.ownerKey(block);
-        Set<String> working = workingByBlockId.computeIfAbsent(id, k -> ConcurrentHashMap.newKeySet());
+        Set<String> workingSet = workingByBlockId.computeIfAbsent(id, k -> ConcurrentHashMap.newKeySet());
         boolean changed;
         if (working) {
-            changed = working.add(owner);
+            changed = workingSet.add(owner);
         } else {
-            changed = working.remove(owner);
+            changed = workingSet.remove(owner);
         }
         FunctionalBlockData data = data(id, block);
         if (data != null) {
