@@ -578,32 +578,42 @@ on cgui drag:
 Контексты: `context.player`, `context.gui`, `context.slot` (click),
 `context.slots` (drag).
 
-#### `cgui slot changed` + механики (Denizen)
+#### `cgui slot changed` + механизмы (Denizen)
+
+В этой линии Denizen (1.3.x) нет «mechanics» — изменения значений
+делаются **механизмами** объектов командой `adjust`:
 
 ```denizen
 # Игрок положил/забрал/перенёс предмет (на следующий тик, предметы фактические):
 on cgui slot changed:
     - if <context.gui> == cooking_pot:
         - if <context.slot> in 1, 2, 3, 10, 11, 12:
-            - cgui - set working:true at <context.block>
+            - adjust <context.block> cgui_working:true
         - if <context.slot_type> == result && <context.slot> == 24 && <context.new_item> is an empty item:
             - # результат забрали — снять работу, если нечего варить
-            - cgui - set working:false at <context.block>
+            - adjust <context.block> cgui_working:false
 
 # Стрелка прогресса / локальные оверрайды (ванильные и кастомные предметы):
-- cgui - set local design:arrow item at 5 for <player>
-- cgui - set local title:&bКотёл 42% for <player>
-- cgui - clear local design for <player>
+- adjust <player> cgui_local_design:[5|arrow item]
+- adjust <player> cgui_local_design:[<context.block>|10|iron_ingot]  # пер-блок
+- adjust <player> cgui_local_title:"&bКотёл 42%"
+- adjust <player> cgui_clear_local_title
+- adjust <player> cgui_clear_local_design
 
-# Данные и слоты блока (при закрытом GUI):
-- cgui - set block data:cook:42 at <loc> for farmersdelight:cooking_pot
-- cgui - set block slot:cooked stew at 24 for <loc>
-- if <cgui.block_data[<loc>,cook]> > 0: ...
-- if <cgui.block_item[<loc>,24]> is an item: ...
+# Данные и слоты блока (работают при закрытом GUI):
+- adjust <loc> cgui_block_data:[cook|42]
+- adjust <loc> cgui_block_data:[farmersdelight:cooking_pot|cook|42]
+- adjust <loc> cgui_block_item:[24|cooked stew]
+- if <cgui.block_data[[<loc>]|cook]> > 0: ...
+- if <cgui.block_item[[<loc>]|24]> is an item: ...
 - if <cgui.working[<loc>]>: ...
 - <cgui.block_of[<player>]>   # локация блока, GUI которого открыт игрок
 - <cgui.viewers[<loc>]>       # зрители блока
 ```
+
+Ввод механизмов и «мульти-тегов» — список (разделитель `|`). Локацию
+рекомендуется оборачивать в квадратные скобки, иначе запятые координат
+столкнутся с разделителем: `<cgui.block_item[[<loc>]|24]>`.
 
 ---
 

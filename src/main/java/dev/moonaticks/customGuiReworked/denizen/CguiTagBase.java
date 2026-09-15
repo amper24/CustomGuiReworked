@@ -5,12 +5,14 @@ import com.denizenscript.denizen.objects.LocationTag;
 import com.denizenscript.denizen.objects.PlayerTag;
 import com.denizenscript.denizencore.objects.core.ElementTag;
 import com.denizenscript.denizencore.objects.core.ListTag;
+import com.denizenscript.denizencore.tags.Attribute;
 import com.denizenscript.denizencore.tags.PseudoObjectTagBase;
 import com.denizenscript.denizencore.tags.TagManager;
 import dev.moonaticks.customGuiReworked.CustomGuiReworked;
 import dev.moonaticks.customGuiReworked.api.Gui;
 import dev.moonaticks.customGuiReworked.api.functional.FunctionalBlockData;
 import org.bukkit.Location;
+import org.bukkit.inventory.ItemStack;
 
 /**
  * Pseudo-object «cgui» для тегов Denizen.
@@ -22,8 +24,21 @@ import org.bukkit.Location;
  *   <li>{@code <cgui.size[<имя>]>} — количество слотов;</li>
  *   <li>{@code <cgui.title[<имя>]>} — заголовок;</li>
  *   <li>{@code <cgui.storage[<имя>]>} — тип хранилища;</li>
- *   <li>{@code <cgui.open_of[<игрок>]>} — GUI, открытое игроком («none» если нет).</li>
+ *   <li>{@code <cgui.open_of[<игрок>]>} — GUI, открытое игроком («none» если нет);</li>
+ *   <li>{@code <cgui.block_of[<игрок>]>} — блок, на котором игрок открыл GUI;</li>
+ *   <li>{@code <cgui.viewers[<локация>]>} — игроки, у которых открыт GUI блока;</li>
+ *   <li>{@code <cgui.working[<локация>]>} — работает ли блок (onBlockTick);</li>
+ *   <li>{@code <cgui.block_item[[<локация>]|<слот>]>} — предмет персистентного
+ *       слота блока (даже при закрытом GUI);</li>
+ *   <li>{@code <cgui.block_data[[<локация>]|<ключ>]>} и
+ *       {@code <cgui.block_data[[<локация>]|<blockid>|<ключ>]>} — персистентные
+ *       данные блока.</li>
  * </ul>
+ *
+ * <p>Множественные параметры задаются списком (разделитель {@code |});
+ * локацию удобно оборачивать в квадратные скобки, чтобы запятые
+ * координат не конфликтовали с разделителем:
+ * {@code <cgui.block_item[[<location>]|5]>}.
  */
 public class CguiTagBase extends PseudoObjectTagBase<CguiTagBase> {
 
@@ -130,12 +145,11 @@ public class CguiTagBase extends PseudoObjectTagBase<CguiTagBase> {
         // @description Returns the players who have the GUI of this block open right now.
         // -->
         tagProcessor.registerTag(ListTag.class, LocationTag.class, "viewers", (attribute, object, location) -> {
-            Location loc = location == null ? null : location.asLocation();
-            if (loc == null || plugin.service() == null) {
+            if (location == null || plugin.service() == null) {
                 return null;
             }
             ListTag list = new ListTag();
-            plugin.service().getViewers(loc)
+            plugin.service().getViewers(location)
                     .forEach(p -> list.addObject(new PlayerTag(p)));
             return list;
         });
@@ -147,76 +161,62 @@ public class CguiTagBase extends PseudoObjectTagBase<CguiTagBase> {
         // @description Returns true if the functional block at this location
         // is "working" (its server logic ticks even without open GUIs).
         // -->
-        tagProcessor.registerTag(ElementTag.class, LocationTag.class, "working", (attribute, object, location) -> {
-            Location loc = location == null ? null : location.asLocation();
-            return new ElementTag(loc != null && plugin.service() != null
-                    && plugin.service().isWorking(loc));
+        tagProcessor.registerTag(ElementTag.class, LocationTag.class, "working", (attribute, object, location) ->
+                new ElementTag(location != null && plugin.service() != null
+                        && plugin.service().isWorking(location)));
+
+        // <--[tag]
+        // @attribute <cgui.block_item[[<location>]|<slot>]>
+        // @returns ItemTag
+        // @plugin CustomGuiReworked
+        // @description
+        // Returns the item stored in a functional block's persistent slot
+        // (works even when the GUI is closed; empty if the slot is empty).
+        // Input is a list: the block location and the slot number, e.g.
+        // <cgui.block_item[[<location>]|5]>.
+        // -->
+        tagProcessor.registerTag(ItemTag.class, ListTag.class, "block_item", (attribute, object, arg) -> {
+            Location loc = locationAt(arg, 0, attribute);
+            int slot = slotAt(arg, 1, attribute);
+            if (loc == null || slot < 0 || plugin.service() == null) {
+                return null;
+            }
+            ItemStack item = plugin.service().getBlockSlotItem(loc, slot);
+            return item == null ? null : new ItemTag(item);
         });
 
         // <--[tag]
-        // @attribute <cgui.block_item[<location>,<slot>]>
-        // @returns ItemTag
-        // @plugin CustomGuiReworked
-        // @description Returns the item stored in a functional block's persistent
-        // slot (works even when the GUI is closed; empty if the slot is empty).
-        // -->
-        tagProcessor.registerTag(ItemTag.class, LocationTag.class, ElementTag.class, "block_item",
-                (attribute, object, location, slot) -> {
-                    Location loc = location == null ? null : location.asLocation();
-                    if (loc == null || slot == null || plugin.service() == null) {
-                        return null;
-                    }
-                    int s;
-                    try {
-                        s = Integer.parseInt(slot.asString().trim());
-                    } catch (NumberFormatException e) {
-                        return null;
-                    }
-                    org.bukkit.inventory.ItemStack item = plugin.service().getBlockSlotItem(loc, s);
-                    return item == null ? null : new ItemTag(item);
-                });
-
-        // <--[tag]
-        // @attribute <cgui.block_data[<location>,<key>]>
+        // @attribute <cgui.block_data[[<location>]|<key>]>
         // @returns ElementTag
         // @plugin CustomGuiReworked
-        // @description Returns a value from the functional block's persistent data.
-        // The block id is resolved via CraftEngine.
+        // @description
+        // Returns a value from the functional block's persistent data
+        // (empty if the key is missing or the block is not functional).
+        // The block id is resolved via CraftEngine. With three list items the
+        // id is given explicitly: <cgui.block_data[[<location>]|<blockid>|<key>]>.
         // -->
-        tagProcessor.registerTag(ElementTag.class, LocationTag.class, ElementTag.class, "block_data",
-                (attribute, object, location, key) -> {
-                    Location loc = location == null ? null : location.asLocation();
-                    if (loc == null || key == null || plugin.service() == null) {
-                        return new ElementTag("");
-                    }
-                    FunctionalBlockData data = plugin.service().blockData(loc);
-                    if (data == null) {
-                        return new ElementTag("");
-                    }
-                    String v = data.getString(key.asString(), "");
-                    return new ElementTag(v);
-                });
-
-        // <--[tag]
-        // @attribute <cgui.block_data[<location>,<blockid>,<key>]>
-        // @returns ElementTag
-        // @plugin CustomGuiReworked
-        // @description Same as <cgui.block_data[<location>,<key>]>, but with an
-        // explicit functional block id instead of CraftEngine resolution.
-        // -->
-        tagProcessor.registerTag(ElementTag.class, LocationTag.class, ElementTag.class, ElementTag.class,
-                "block_data", (attribute, object, location, blockId, key) -> {
-                    Location loc = location == null ? null : location.asLocation();
-                    if (loc == null || blockId == null || key == null || plugin.service() == null) {
-                        return new ElementTag("");
-                    }
-                    FunctionalBlockData data = plugin.service().blockData(blockId.asString(), loc);
-                    if (data == null) {
-                        return new ElementTag("");
-                    }
-                    String v = data.getString(key.asString(), "");
-                    return new ElementTag(v);
-                });
+        tagProcessor.registerTag(ElementTag.class, ListTag.class, "block_data", (attribute, object, arg) -> {
+            if (arg == null || arg.size() < 2 || plugin.service() == null) {
+                return new ElementTag("");
+            }
+            Location loc = locationAt(arg, 0, attribute);
+            if (loc == null) {
+                return new ElementTag("");
+            }
+            FunctionalBlockData data;
+            String key;
+            if (arg.size() >= 3) {
+                data = plugin.service().blockData(arg.get(1), loc);
+                key = arg.get(2);
+            } else {
+                data = plugin.service().blockData(loc);
+                key = arg.get(1);
+            }
+            if (data == null) {
+                return new ElementTag("");
+            }
+            return new ElementTag(data.getString(key, ""));
+        });
     }
 
     private Gui lookup(ElementTag name) {
@@ -224,5 +224,37 @@ public class CguiTagBase extends PseudoObjectTagBase<CguiTagBase> {
             return null;
         }
         return plugin.registry().get(name.asString());
+    }
+
+    /** Item {@code index} of the list argument as a Bukkit location. */
+    private Location locationAt(ListTag arg, int index, Attribute attribute) {
+        if (arg == null || index >= arg.size()) {
+            return null;
+        }
+        String s = arg.get(index);
+        if (s == null || s.isEmpty()) {
+            return null;
+        }
+        LocationTag loc = LocationTag.valueOf(s, attribute == null ? null : attribute.context);
+        return loc == null ? null : loc.clone();
+    }
+
+    /** Item {@code index} of the list argument as a slot number (-1 on error). */
+    private int slotAt(ListTag arg, int index, Attribute attribute) {
+        if (arg == null || index >= arg.size()) {
+            return -1;
+        }
+        String s = arg.get(index);
+        if (s == null) {
+            return -1;
+        }
+        try {
+            return Integer.parseInt(s.trim());
+        } catch (NumberFormatException e) {
+            if (attribute != null) {
+                attribute.echoError("cgui: slot must be a number, got '" + s + "'");
+            }
+            return -1;
+        }
     }
 }

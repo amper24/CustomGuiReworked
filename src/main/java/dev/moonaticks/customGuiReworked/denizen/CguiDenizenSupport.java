@@ -75,9 +75,9 @@ public final class CguiDenizenSupport implements Listener {
             ScriptEvent.registerScriptEvent(CguiDragScriptEvent.class);
             ScriptEvent.registerScriptEvent(CguiSlotChangedScriptEvent.class);
             new CguiTagBase(plugin);
-            new CguiMechanics(plugin);
+            new CguiMechanisms(plugin);
             registered = true;
-            plugin.getLogger().info("Denizen support: events, tags and mechanics registered");
+            plugin.getLogger().info("Denizen support: events, tags and mechanisms registered");
         } catch (Throwable t) {
             plugin.getLogger().log(Level.SEVERE, "Failed to register Denizen support", t);
         }

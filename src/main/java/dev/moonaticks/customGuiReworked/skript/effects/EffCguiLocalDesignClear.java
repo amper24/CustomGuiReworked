@@ -37,7 +37,7 @@ public class EffCguiLocalDesignClear extends Effect {
         if (plugin == null || plugin.service() == null) {
             return;
         }
-        plugin.service().clearLocalDesign(p);
+        plugin.service().clearAllLocalDesigns(p);
     }
 
     @Override
