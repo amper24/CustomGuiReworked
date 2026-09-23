@@ -607,7 +607,7 @@ public class GuiOpener {
                 continue;
             }
             SlotType watcher = gui.slotType(related);
-            if (watcher.watches(event.getSlotType())) {
+            if (watcher != null && watcher.watches(event.getSlotType())) {
                 try {
                     watcher.handleRelatedChange(new SlotType.SlotRelationEvent(event, related));
                 } catch (RuntimeException e) {

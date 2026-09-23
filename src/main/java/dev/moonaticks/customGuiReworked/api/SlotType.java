@@ -2,6 +2,7 @@ package dev.moonaticks.customGuiReworked.api;
 
 import dev.moonaticks.customGuiReworked.api.event.GuiSlotChangedEvent;
 import dev.moonaticks.customGuiReworked.api.event.GuiSlotClickEvent;
+import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
@@ -365,7 +366,8 @@ public final class SlotType {
         }
 
         public Builder icon(Material value) {
-            if (value == null || !value.isItem()) {
+            // Paper can only answer isItem() once its RegistryAccess is ready.
+            if (value == null || (Bukkit.getServer() != null && !value.isItem())) {
                 throw new IllegalArgumentException("Slot type icon must be an item");
             }
             icon = value;

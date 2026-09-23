@@ -1,5 +1,6 @@
 package dev.moonaticks.customGuiReworked.api;
 
+import org.bukkit.Bukkit;
 import org.bukkit.Material;
 
 import java.util.Locale;
@@ -21,7 +22,9 @@ public record GuiCategory(String id, String displayName, Material icon, String d
             throw new IllegalArgumentException("'none' is reserved for GUIs without a category");
         }
         displayName = displayName == null || displayName.isBlank() ? id : displayName;
-        icon = icon == null || !icon.isItem() ? Material.BOOK : icon;
+        // Paper's Material.isItem() reads RegistryAccess, which is unavailable
+        // before Bukkit has a server (e.g. in static definitions and unit tests).
+        icon = icon == null || (Bukkit.getServer() != null && !icon.isItem()) ? Material.BOOK : icon;
         description = description == null ? "" : description;
     }
 
