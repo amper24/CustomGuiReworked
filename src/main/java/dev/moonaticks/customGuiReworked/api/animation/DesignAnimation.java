@@ -343,7 +343,7 @@ public final class DesignAnimation {
                 continue;
             }
             SlotType type = holder.gui().slotType(slot);
-            if (type != SlotType.DESIGN && type != SlotType.RESULT) {
+            if (!type.allowsLocalDesign()) {
                 continue; // оверрайды только для не-персистентных слотов
             }
             GuiOpener.applyLocalDesign(holder, slot, frame);

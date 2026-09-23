@@ -2,7 +2,7 @@
 # при запуске плагин обновляет файл на диске, если его версия меньше
 # (старый файл сохраняется рядом как <имя>.bak).
 # Отключается в config.yml: language-auto-update: false
-lang-version: 3
+lang-version: 4
 
 language:
   # ---------- Общее ----------
@@ -21,6 +21,7 @@ language:
     skeletonTitle: "§6Скелет: §f%s"
     designTitle: "§aДизайн: §f%s"
     storageTitle: "§bХранилище: §f%s"
+    categoryTitle: "§eКатегория: §f%s"
     blocksTitle: "§dБлоки: §f%s"
     filler: " "
     btn:
@@ -31,12 +32,14 @@ language:
       storage: "§bХранилище данных"
       preview: "§2Предпросмотр"
       blocks: "§dКастомные блоки"
+      category: "§eКатегория"
       back: "§cНазад"
       delete: "§cУдалить этот GUI"
     info:
       name: "§fСводка"
       size: "§7Размер: §f%s"
       storage: "§7Хранилище: §f%s"
+      category: "§7Категория: §f%s"
       type: "§7%s: §f%d"
       commands: "§7Команд: §f%s"
       blocks: "§7Привязано блоков: §f%s"
@@ -44,7 +47,19 @@ language:
       option: "§f%s слотов"
     skeleton:
       hint1: "§7Клик — сменить тип"
+      unknown: "§cНеизвестный тип: §f%s"
       hint2: "§7Shift-клик — сделать Design"
+    category:
+      none: "§7Без категории"
+      create: "§aСоздать категорию"
+      id: "§8ID: §f%s"
+      prev: "§eПредыдущая страница"
+      next: "§eСледующая страница"
+      page: "§fСтраница §6%s/%s"
+      prompt: "§eВведите ID и название категории в чат (например: machines Механизмы). §c/cancel §e— отмена."
+      changed: "§aКатегория установлена: §f%s"
+      exists: "§cКатегория с таким ID уже существует."
+      invalid: "§cНеверный ID: латиница, цифры, . _ - и необязательное пространство имён через :."
     design:
       empty: "§7Пусто"
       locked: "§cЗаблокирован (слот скелета)"
@@ -99,9 +114,12 @@ language:
     title:
       list: "§6Список GUI"
       options: "§6GUI: §f%s"
+      categories: "§6Категории GUI"
     filler: " "
     btn:
       search: "§bПоиск"
+      category: "§eКатегория: §f%s"
+      categoryHint: "§7Выберите категорию для фильтрации списка."
       searchHint: "§7Введите текст в чат, чтобы искать по имени."
       create: "§eНовый GUI"
       createHint: "§7Кликните и введите имя в чат."
@@ -114,11 +132,17 @@ language:
     status:
       count: "§7GUI: §f%s"
       search: "§7Поиск: §f%s"
+      category: "§7Категория: §f%s"
       noSearch: "§7Поиска нет"
+    category:
+      all: "§fВсе категории"
+      none: "§7Без категории"
+      count: "§7GUI: §f%s"
     gui:
       title: "§8Заголовок: §f%s"
       size: "§8Размер: §f%s"
       storage: "§8Хранилище: §f%s"
+      category: "§8Категория: §f%s"
       blocks: "§8Привязано блоков: §f%s"
       commands: "§8Команд слотов: §f%s"
       source:

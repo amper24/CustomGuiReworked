@@ -110,7 +110,12 @@ on cgui slot changed:
 
 Контексты: `context.player`, `context.gui`, `context.slot` (click/slot
 changed), `context.slots` (drag), `context.slot_type`,
-`context.block`, `context.old_item`, `context.new_item`.
+`context.block`, `context.old_item`, `context.new_item`. Для кастомного
+`SlotType` значение `context.slot_type` — его namespaced ID в нижнем
+регистре, например `myaddon:ore`; в Skript используйте номер слота
+(`event-number`) и имя GUI. Создание категорий/типов и регистрация их
+поведения доступны **через Java API**, не через синтаксис Skript/Denizen
+([API.md §4.1–4.2](https://github.com/amper24/CustomGuiReworked/blob/main/API.md#41-категории-в-gui-и-редакторе)).
 
 ### Механизмы (изменения — через `adjust`)
 

@@ -3,7 +3,10 @@
 Отдельная подборка **готовых примеров**: от «первый GUI за 10 строк» до
 полного «умного» блока (котёл, который варит без открытого GUI).
 Полный справочник методов — в [`API.md`](API.md), внутренности — в
-[`MECHANICS.md`](MECHANICS.md).
+[`MECHANICS.md`](MECHANICS.md). Категории и расширяемые типы слотов
+доступны начиная с **`2.4.5`**; полный пример — в
+[§9](#9-категории-и-пользовательские-типы-слотов). Для аддона и сервера
+используйте одну и ту же версию API.
 
 ---
 
@@ -18,6 +21,7 @@
 - [6. Анимация дизайн-слотов](#6-анимация-дизайн-слотов)
 - [7. События API](#7-события-api)
 - [8. Skript и Denizen](#8-skript-и-denizen)
+- [9. Категории и пользовательские типы слотов](#9-категории-и-пользовательские-типы-слотов)
 
 ---
 
@@ -26,6 +30,8 @@
 | Задача | API | Пример |
 |---|---|---|
 | Создать / изменить / удалить GUI | `GuiBuilder`, `registerGui`, `unregisterGui`, `deleteGui`, `loadGui`, `saveGui` | [§2](#2-создать-gui-в-коде) |
+| Категории для `/gui` и редактора | `GuiCategory`, `registerCategory`, `GuiBuilder.category(...)` | [§9](#9-категории-и-пользовательские-типы-слотов) |
+| Собственный `SlotType` с фильтром и направленной связью | `SlotType.builder`, `registerSlotType`, `watch`, `onRelatedChange`, `setSlotItem` | [§9](#9-категории-и-пользовательские-типы-слотов) |
 | Открыть GUI (в т.ч. на блоке, временно) | `openGui(player, name[, block[, StorageType]])`, `getOpenGui` | [§3](#3-открытие-и-хранилище) |
 | Читать/писать хранилище без открытого GUI | `readStorage`, `writeStorage`, `deleteStorage` | [§3](#3-открытие-и-хранилище) |
 | Название/дизайн окна **только для одного игрока** | `setLocalTitle`, `setLocalDesign(s)`, `clearLocalDesign`, `clearAllLocalDesigns`, `getLocalDesign` (+ per-блок варианты) | [§4](#4-локальные-оверрайды-per-зритель) |
@@ -50,7 +56,7 @@
 
 ```java
 // build.gradle
-compileOnly 'com.github.amper24:CustomGuiReworked:2.4.0'   // JitPack
+compileOnly 'com.github.amper24:CustomGuiReworked:2.4.5'   // JitPack
 
 // plugin.yml
 // softdepend: [CustomGuiReworked]
@@ -602,3 +608,147 @@ on cgui slot changed:
 В этой линии Denizen (1.3.x) нет «mechanics» — запись делается
 механизмами через `adjust`, «мульти-теги» принимают список (`|`),
 локацию лучше писать в скобках: `<cgui.block_item[[<loc>]|24]>`.
+
+---
+
+## 9. Категории и пользовательские типы слотов
+
+Полный небольшой аддон: категория **«Механизмы»**, слот, принимающий
+только железную руду, и слот-индикатор, который **наблюдает** за входом.
+Индикатор нельзя забрать, поэтому этот пример не выдаёт игроку бесплатные
+предметы. Значение входа хранится отдельно для каждого игрока
+(`StorageType.PERSONAL`), индикатор в файл не пишется.
+
+Подключите **`2.4.5`**, совпадающую с серверной сборкой, как
+`compileOnly`, без `shade` — подробнее [API.md §1](API.md#1-подключение-зависимости).
+В этом аддоне интеграция
+обязательна, поэтому в `plugin.yml` используем `depend` (если она
+опциональна — `softdepend` и отдельные загружаемые по условию классы):
+
+```yaml
+name: OreStatusAddon
+version: '1.0.0'
+main: com.example.OreStatusAddon
+api-version: '26.2'
+depend: [CustomGuiReworked]
+```
+
+```java
+package com.example;
+
+import dev.moonaticks.customGuiReworked.api.CustomGuiAPI;
+import dev.moonaticks.customGuiReworked.api.Gui;
+import dev.moonaticks.customGuiReworked.api.GuiBuilder;
+import dev.moonaticks.customGuiReworked.api.GuiCategory;
+import dev.moonaticks.customGuiReworked.api.SlotType;
+import dev.moonaticks.customGuiReworked.api.StorageType;
+import dev.moonaticks.customGuiReworked.api.event.GuiOpenEvent;
+import org.bukkit.Material;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.Listener;
+import org.bukkit.inventory.Inventory;
+import org.bukkit.inventory.ItemStack;
+import org.bukkit.plugin.java.JavaPlugin;
+
+public final class OreStatusAddon extends JavaPlugin implements Listener {
+    private static final String GUI = "ore_status";
+    private static final String ORE = "myaddon:ore";
+    private static final String INDICATOR = "myaddon:indicator";
+    private static final int INPUT_SLOT = 13;
+    private static final int INDICATOR_SLOT = 22;
+
+    @Override
+    public void onEnable() {
+        if (!CustomGuiAPI.isInitialized()) {
+            getLogger().warning("CustomGuiReworked не найден");
+            return;
+        }
+
+        // Имя/иконка/описание категории пишутся в categories.yml.
+        GuiCategory machines = CustomGuiAPI.registerCategory(new GuiCategory(
+                "myaddon:machines", "§6Механизмы", Material.FURNACE,
+                "§7Интерфейсы станков"));
+
+        // Сохранённый слот принимает только IRON_ORE; забирать её можно.
+        SlotType ore = CustomGuiAPI.registerSlotType(SlotType.builder(ORE)
+                .displayName("§6Вход: руда")
+                .description("§7Принимает только железную руду")
+                .icon(Material.IRON_ORE)
+                .allowInsert(true).allowTake(true).persist(true)
+                .acceptInsert(ctx -> ctx.item().getType() == Material.IRON_ORE)
+                .build());
+
+        // Направленная связь: когда меняется ЛЮБОЙ слот типа ore в том же
+        // открытом GUI, callback получает индекс КАЖДОГО слота indicator.
+        SlotType indicator = CustomGuiAPI.registerSlotType(SlotType.builder(INDICATOR)
+                .displayName("§aИндикатор")
+                .icon(Material.LIME_DYE)
+                .track(true)       // изменения видны в GuiSlotChangedEvent, без записи в файл
+                .watch(ore)
+                .onRelatedChange(relation -> updateIndicator(
+                        relation.change().getInventory(),
+                        relation.change().getSlot(), relation.relatedSlot()))
+                .onClick(event -> { // покажем подсказку, не меняя содержимое
+                    event.setInteractionCancelled(true);
+                    event.getPlayer().sendMessage("§7Это индикатор, предмет нельзя забрать");
+                })
+                .build());         // allowInsert/allowTake по умолчанию false
+
+        Gui gui = GuiBuilder.named(GUI).size(27)
+                .title("§6Станок: состояние")
+                .category(machines)              // или .category("myaddon:machines")
+                .storage(StorageType.PERSONAL)
+                .slot(INPUT_SLOT, ore)
+                .slot(INDICATOR_SLOT, indicator)
+                .build();
+        CustomGuiAPI.registerGui(gui, true);     // custom/ore_status.yml
+
+        getServer().getPluginManager().registerEvents(this, this);
+    }
+
+    // При открытии уже сохранённая руда не меняется: watch не вызывается.
+    // Инициализируем индикатор по содержимому загруженного инвентаря.
+    @EventHandler
+    public void onOpen(GuiOpenEvent event) {
+        if (GUI.equals(event.getGui().name())) {
+            updateIndicator(event.getInventory(), INPUT_SLOT, INDICATOR_SLOT);
+        }
+    }
+
+    private void updateIndicator(Inventory inventory, int inputSlot, int indicatorSlot) {
+        ItemStack input = inventory.getItem(inputSlot);
+        ItemStack status = input != null && input.getType() == Material.IRON_ORE
+                ? new ItemStack(Material.LIME_DYE) : null;
+        // Работает с открытым инвентарём, включая GuiOpenEvent (holder уже
+        // прикреплён); изменение отследится при следующей реконсиляции.
+        CustomGuiAPI.setSlotItem(inventory, indicatorSlot, status);
+    }
+
+    @Override
+    public void onDisable() {
+        if (!CustomGuiAPI.isInitialized()) return;
+        // Окна с этими слотами закроются перед отключением правил.
+        // GUI и описание категории остаются в файлах для следующего запуска.
+        CustomGuiAPI.unregisterSlotType(INDICATOR);
+        CustomGuiAPI.unregisterSlotType(ORE);
+    }
+}
+```
+
+После запуска можно выполнить `/gui` → **Категория** → **Механизмы** →
+`ore_status` или открыть `CustomGuiAPI.openGui(player, "ore_status")`.
+Положите железную руду в слот 13: слот 22 станет зелёным. Уберите руду:
+индикатор очистится. Класть другие предметы в слот 13 и забирать
+индикатор нельзя; при новом открытии персональная руда восстановится,
+а `GuiOpenEvent` вновь рассчитает индикатор.
+
+**Важно:** `watch(ore)` направлен только в одну сторону и работает по
+**фактическим** изменениям отслеживаемых слотов того же открытого GUI.
+`setSlotItem` не обновляет окна других зрителей; для блока, работающего
+без зрителей, нужен `setBlockSlotItem`. Если вместо индикатора хотите
+**забираемый результат**, настройте `allowTake(true).track(true)` и
+самостоятельно проверяйте рецепт и расходуйте вход при выдаче, иначе
+результат можно получать многократно. Правила слотов и callback'и не
+сохраняются в YAML: на диске только IDs в `skeleton:`. См.
+[API.md §4.2](API.md#42-собственные-типы-слотов-и-связи-между-ними)
+для таблицы флагов, формата файлов и жизненного цикла.

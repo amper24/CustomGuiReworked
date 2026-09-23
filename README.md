@@ -2,7 +2,9 @@
 
 Skeleton-based GUI framework для **Paper 26.2** (Java 25): визуальный in-game редактор, высокопроизводительное хранилище, интеграция кастомных блоков (ItemsAdder + CraftEngine) и готовый публичный API как библиотека.
 
-> **Версия:** `2.4.0` — см. [`build.gradle`](build.gradle) и [`gradle.properties`](gradle.properties)
+> **Версия: `2.4.5`.** В этой версии добавлены категории и расширяемые
+> типы слотов. Аддонам нужен API `2.4.5` и соответствующий jar на сервере;
+> собранные против прежнего `SlotType enum` плагины необходимо пересобрать.
 
 ---
 
@@ -14,6 +16,7 @@ Skeleton-based GUI framework для **Paper 26.2** (Java 25): визуальны
 - [Установка](#установка)
 - [Команды](#команды)
 - [Редактор](#редактор)
+- [Категории и пользовательские типы слотов](#категории-и-пользовательские-типы-слотов)
 - [Хранилище](#хранилище)
 - [Конфигурация](#конфигурация)
 - [API для разработчиков](#api-для-разработчиков)
@@ -37,10 +40,10 @@ Skeleton-based GUI framework для **Paper 26.2** (Java 25): визуальны
 Основная документация разбита по файлам — все ссылки относительные из корня репозитория:
 
 ### Гайды
-- **[`API.md`](API.md)** — полный гайд для разработчиков: подключение, билдер, хранилище, события, кастомные блоки, локальные оверрайды, функциональные блоки, Skript/Denizen, потоковая модель.
-- **[`EXAMPLES.md`](EXAMPLES.md)** — готовые примеры кода: от «первый GUI за 10 строк» до полного котла (варит без открытого GUI), анимации, события.
+- **[`API.md`](API.md)** — полный гайд для разработчиков: [категории](API.md#41-категории-в-gui-и-редакторе), [типы слотов и связи](API.md#42-собственные-типы-слотов-и-связи-между-ними), билдер, хранилище, события, функциональные блоки, Skript/Denizen.
+- **[`EXAMPLES.md`](EXAMPLES.md)** — готовые примеры кода: первый GUI, полный котёл, [аддон с категорией, фильтром предметов и `watch`](EXAMPLES.md#9-категории-и-пользовательские-типы-слотов).
 - **[`docs/`](docs/Home.md)** — wiki-документация: [API возможности](docs/api.md), [умный блок — котёл (пошагово)](docs/smart-block.md), [Skript и Denizen](docs/scripts.md), [примеры](docs/examples.md).
-- **[`MECHANICS.md`](MECHANICS.md)** — внутренние механики: скелет слотов, shift/double-click, StorageService, кодеки, BlockHookDispatcher, EditorSession, ManagerMenu.
+- **[`MECHANICS.md`](MECHANICS.md)** — внутренние механики: расширяемый скелет слотов, shift/double-click, StorageService, редактор и фильтрация менеджера.
 
 ### Конфигурация и ресурсы
 - **[`src/main/resources/config.yml`](src/main/resources/config.yml)** — дефолтный конфиг (язык, autosave, coalesce, интеграции).
@@ -51,9 +54,10 @@ Skeleton-based GUI framework для **Paper 26.2** (Java 25): визуальны
 ### Публичный API
 - **[`api/GuiService.java`](src/main/java/dev/moonaticks/customGuiReworked/api/GuiService.java)** — главный сервисный интерфейс (Bukkit Services).
 - **[`api/CustomGuiAPI.java`](src/main/java/dev/moonaticks/customGuiReworked/api/CustomGuiAPI.java)** — статический фасад над `GuiService`.
-- **[`api/Gui.java`](src/main/java/dev/moonaticks/customGuiReworked/api/Gui.java)** — модель GUI (имя, титул, размер, скелет, дизайн, команды, блоки).
+- **[`api/Gui.java`](src/main/java/dev/moonaticks/customGuiReworked/api/Gui.java)** — модель GUI (имя, категория, титул, размер, скелет, дизайн, команды, блоки).
 - **[`api/GuiBuilder.java`](src/main/java/dev/moonaticks/customGuiReworked/api/GuiBuilder.java)** — fluent-билдер.
-- **[`api/SlotType.java`](src/main/java/dev/moonaticks/customGuiReworked/api/SlotType.java)** — типы слотов: `DESIGN`, `CONTAINER`, `CRAFT`, `RESULT`, `FUEL`.
+- **[`api/GuiCategory.java`](src/main/java/dev/moonaticks/customGuiReworked/api/GuiCategory.java)** — ID, название, иконка и описание категории.
+- **[`api/SlotType.java`](src/main/java/dev/moonaticks/customGuiReworked/api/SlotType.java)** — встроенные и регистрируемые типы слотов, правила взаимодействия и связи.
 - **[`api/StorageType.java`](src/main/java/dev/moonaticks/customGuiReworked/api/StorageType.java)** — типы хранилища: `BLOCK`, `PERSONAL`, `GLOBAL`, `TEAM`, `TEMPORARY`.
 - **[`api/SlotCommand.java`](src/main/java/dev/moonaticks/customGuiReworked/api/SlotCommand.java)** — команда слота (`slot`, `command`, `delay`).
 - **[`api/GuiServiceImpl.java`](src/main/java/dev/moonaticks/customGuiReworked/api/GuiServiceImpl.java)** — реализация сервиса.
@@ -72,19 +76,19 @@ Skeleton-based GUI framework для **Paper 26.2** (Java 25): визуальны
   - **[`api/event/GuiSlotChangedEvent.java`](src/main/java/dev/moonaticks/customGuiReworked/api/event/GuiSlotChangedEvent.java)** — содержимое слота изменилось (след. тик), предметы «было/стало».
 
 ### Внутренние модули (для понимания механик)
-- **GUI ядро:** [`gui/GuiHolder.java`](src/main/java/dev/moonaticks/customGuiReworked/gui/GuiHolder.java), [`gui/GuiOpener.java`](src/main/java/dev/moonaticks/customGuiReworked/gui/GuiOpener.java), [`gui/GuiRegistry.java`](src/main/java/dev/moonaticks/customGuiReworked/gui/GuiRegistry.java)
+- **GUI ядро:** [`gui/GuiHolder.java`](src/main/java/dev/moonaticks/customGuiReworked/gui/GuiHolder.java), [`gui/GuiOpener.java`](src/main/java/dev/moonaticks/customGuiReworked/gui/GuiOpener.java), [`gui/GuiRegistry.java`](src/main/java/dev/moonaticks/customGuiReworked/gui/GuiRegistry.java), [`gui/CategoryRegistry.java`](src/main/java/dev/moonaticks/customGuiReworked/gui/CategoryRegistry.java)
 - **Хранилище:** [`storage/StorageService.java`](src/main/java/dev/moonaticks/customGuiReworked/storage/StorageService.java), [`storage/StorageKey.java`](src/main/java/dev/moonaticks/customGuiReworked/storage/StorageKey.java), [`storage/StorageView.java`](src/main/java/dev/moonaticks/customGuiReworked/storage/StorageView.java), [`storage/StorageBackend.java`](src/main/java/dev/moonaticks/customGuiReworked/storage/StorageBackend.java), [`storage/SimpleStorageBackend.java`](src/main/java/dev/moonaticks/customGuiReworked/storage/SimpleStorageBackend.java), [`storage/BlockStorageBackend.java`](src/main/java/dev/moonaticks/customGuiReworked/storage/BlockStorageBackend.java)
 - **Кодеки предметов:** [`codec/Codecs.java`](src/main/java/dev/moonaticks/customGuiReworked/codec/Codecs.java), [`codec/ItemCodec.java`](src/main/java/dev/moonaticks/customGuiReworked/codec/ItemCodec.java), [`codec/BukkitItemCodec.java`](src/main/java/dev/moonaticks/customGuiReworked/codec/BukkitItemCodec.java), [`codec/NbtApiItemCodec.java`](src/main/java/dev/moonaticks/customGuiReworked/codec/NbtApiItemCodec.java), [`codec/LegacyPayloads.java`](src/main/java/dev/moonaticks/customGuiReworked/codec/LegacyPayloads.java)
 - **Редактор:** [`editor/EditorSession.java`](src/main/java/dev/moonaticks/customGuiReworked/editor/EditorSession.java), [`editor/EditorManager.java`](src/main/java/dev/moonaticks/customGuiReworked/editor/EditorManager.java), [`editor/EditorHolder.java`](src/main/java/dev/moonaticks/customGuiReworked/editor/EditorHolder.java), [`editor/EditorListener.java`](src/main/java/dev/moonaticks/customGuiReworked/editor/EditorListener.java)
 - **Менеджер `/gui`:** [`manager/ManagerMenu.java`](src/main/java/dev/moonaticks/customGuiReworked/manager/ManagerMenu.java), [`manager/ManagerSession.java`](src/main/java/dev/moonaticks/customGuiReworked/manager/ManagerSession.java), [`manager/ManagerHolder.java`](src/main/java/dev/moonaticks/customGuiReworked/manager/ManagerHolder.java)
 - **Интеграции блоков:** [`integration/BlockHookManager.java`](src/main/java/dev/moonaticks/customGuiReworked/integration/BlockHookManager.java), [`integration/BlockHookDispatcher.java`](src/main/java/dev/moonaticks/customGuiReworked/integration/BlockHookDispatcher.java), [`integration/BlockPluginHook.java`](src/main/java/dev/moonaticks/customGuiReworked/integration/BlockPluginHook.java), [`integration/ItemsAdderHook.java`](src/main/java/dev/moonaticks/customGuiReworked/integration/ItemsAdderHook.java), [`integration/CraftEngineHook.java`](src/main/java/dev/moonaticks/customGuiReworked/integration/CraftEngineHook.java)
 - **Команды:** [`command/GuiCommand.java`](src/main/java/dev/moonaticks/customGuiReworked/command/GuiCommand.java), [`command/GuiTabCompleter.java`](src/main/java/dev/moonaticks/customGuiReworked/command/GuiTabCompleter.java)
-- **Слушатели:** [`listeners/GuiInteractionListener.java`](src/main/java/dev/moonaticks/customGuiReworked/listeners/GuiInteractionListener.java), [`listeners/PlayerListener.java`](src/main/java/dev/moonaticks/customGuiReworked/listeners/PlayerListener.java)
+- **Слушатели:** [`listeners/GuiInteractionListener.java`](src/main/java/dev/moonaticks/customGuiReworked/listeners/GuiInteractionListener.java), [`listeners/SlotInteractionPolicy.java`](src/main/java/dev/moonaticks/customGuiReworked/listeners/SlotInteractionPolicy.java), [`listeners/PlayerListener.java`](src/main/java/dev/moonaticks/customGuiReworked/listeners/PlayerListener.java)
 - **Skript:** [`skript/SkriptSupport.java`](src/main/java/dev/moonaticks/customGuiReworked/skript/SkriptSupport.java) + эффекты/условия/выражения в [`skript/`](src/main/java/dev/moonaticks/customGuiReworked/skript/)
 - **Denizen:** [`denizen/CguiDenizenSupport.java`](src/main/java/dev/moonaticks/customGuiReworked/denizen/CguiDenizenSupport.java), [`denizen/CguiTagBase.java`](src/main/java/dev/moonaticks/customGuiReworked/denizen/CguiTagBase.java) + events в [`denizen/events/`](src/main/java/dev/moonaticks/customGuiReworked/denizen/events/)
 
 ### Тесты
-- **[`src/test/`](src/test/java/dev/moonaticks/customGuiReworked/)** — 150 unit-тестов: `api/`, `codec/`, `storage/`, `gui/`, `editor/`, `lang/`.
+- **[`src/test/`](src/test/java/dev/moonaticks/customGuiReworked/)** — unit-тесты: API категорий/типов, меню, механики слотов, `codec/`, `storage/`, `editor/`, `lang/`.
 
 ---
 
@@ -92,6 +96,8 @@ Skeleton-based GUI framework для **Paper 26.2** (Java 25): визуальны
 
 - **Визуальный редактор** `/gui create <name>` — размер, скелет слотов, дизайн, титул, тип хранилища, привязки блоков, live preview. Всё сохраняется мгновенно, без мерцания окон.
 - **Скелет слотов** — каждый слот типизирован: `DESIGN` (декорация), `CONTAINER`, `CRAFT`, `RESULT` (только забор), `FUEL`.
+- **Категории в `/gui`** — по умолчанию «Без категории», фильтр вместе с поиском и пагинацией; категория выбирается/создаётся в редакторе или регистрируется через API.
+- **Собственные `SlotType`** — регистрация через API: фильтры вставки/изъятия, обработчики кликов/изменений, направленные связи `watch` и обновление отслеживаемых слотов. См. [категории и типы](#категории-и-пользовательские-типы-слотов).
 - **5 типов хранилища**: `block`, `personal`, `global`, `team`, `temporary` — см. [`StorageType.java`](src/main/java/dev/moonaticks/customGuiReworked/api/StorageType.java) и раздел [Хранилище](#хранилище).
 - **Оптимизированный движок хранения**: in-memory кэш, асинхронные коалесированные записи, диф по baseline, атомарные записи (tmp + move), autosave + гарантированный save на close/quit/stop.
 - **Кастомные блоки**: ПКМ по ItemsAdder / CraftEngine блоку открывает привязанный GUI; слом блока дропает содержимое и закрывает интерфейсы. Интеграции грузятся рефлексивно — см. [`integration/`](src/main/java/dev/moonaticks/customGuiReworked/integration/).
@@ -126,6 +132,7 @@ Skeleton-based GUI framework для **Paper 26.2** (Java 25): визуальны
    - `plugins/CustomGuiReworked/lang/{en,ru}.yml` — из [`lang/`](src/main/resources/lang/)
    - `plugins/CustomGuiReworked/tables/` — GUI из редактора
    - `plugins/CustomGuiReworked/custom/` — GUI из API других плагинов
+   - `plugins/CustomGuiReworked/categories.yml` — описания категорий (создаётся при регистрации первой сохраняемой категории)
    - `plugins/CustomGuiReworked/data/` — `players/`, `teams/`, `globals/`
    - `<world>/CustomGuiReworked/blocks/` — регион-файлы блоков
 
@@ -135,7 +142,7 @@ Skeleton-based GUI framework для **Paper 26.2** (Java 25): визуальны
 
 | Команда | Описание | Право | Код |
 |---|---|---|---|
-| `/gui` | Менеджер GUI (пагинация, поиск) | `cgui.command` | [`ManagerMenu.java`](src/main/java/dev/moonaticks/customGuiReworked/manager/ManagerMenu.java) |
+| `/gui` | Менеджер GUI (категории, поиск, пагинация) | `cgui.command` | [`ManagerMenu.java`](src/main/java/dev/moonaticks/customGuiReworked/manager/ManagerMenu.java) |
 | `/gui create <name>` | Создать + открыть редактор | `cgui.create` | [`GuiCommand.java`](src/main/java/dev/moonaticks/customGuiReworked/command/GuiCommand.java) |
 | `/gui edit <name>` | Открыть редактор | `cgui.edit` | |
 | `/gui open <name>` | Открыть GUI | `cgui.open` | [`GuiOpener.java`](src/main/java/dev/moonaticks/customGuiReworked/gui/GuiOpener.java) |
@@ -155,15 +162,80 @@ Skeleton-based GUI framework для **Paper 26.2** (Java 25): визуальны
 `/gui create <name>` открывает редактор — см. [`editor/EditorSession.java`](src/main/java/dev/moonaticks/customGuiReworked/editor/EditorSession.java):
 
 - **Размер** — 9/18/27/36/45/54 (существующие слоты сохраняются при ресайзе) — [`Gui.java#slots()`](src/main/java/dev/moonaticks/customGuiReworked/api/Gui.java)
-- **Скелет** — клик циклит тип (`Design → Container → Craft → Result → Fuel`), shift-клик форсит `Design` — [`SlotType.java`](src/main/java/dev/moonaticks/customGuiReworked/api/SlotType.java)
+- **Скелет** — клик циклит встроенные и зарегистрированные через API типы (`Design → Container → Craft → Result → Fuel → …`), shift-клик форсит `Design` — [`SlotType.java`](src/main/java/dev/moonaticks/customGuiReworked/api/SlotType.java)
 - **Дизайн** — бери предметы из своего инвентаря: на курсор + клик по слоту, shift-клик из инвентаря, drag. ПКМ пустой рукой чистит слот. Double-click отключён.
 - **Титул** — чат-промпт, `/cancel` отменяет.
 - **Хранилище** — выбор `StorageType`.
 - **Preview** — открывает GUI как игрок.
+- **Категория** — по умолчанию «Без категории»; выбор существующей или создание в чате (`id Название`). В `/gui` отдельный список категорий (в том числе «Все» и «Без категории») фильтрует GUI вместе с поиском и пагинацией. Иконку и описание можно задать через API или `categories.yml` — см. [ниже](#категории-и-пользовательские-типы-слотов).
 - **Custom blocks** — bind/unbind ID (`custom_block`, `craftengine:custom_block`) — [`BlockHookManager.java`](src/main/java/dev/moonaticks/customGuiReworked/integration/BlockHookManager.java)
 - **Delete** — удаление (право `cgui.delete`).
 
 Подробнее — [MECHANICS.md#редактор](MECHANICS.md#редактор).
+
+---
+
+## Категории и пользовательские типы слотов
+
+**Администратору.** В `/gui` нажми **Категория** → **Все** / **Без
+категории** / нужная категория. Фильтр работает вместе с поиском по
+имени и листанием страниц. В редакторе GUI выбери **Категория** и
+существующий пункт либо **Создать** и введи в чат, например,
+`machines Механизмы` (`/cancel` — отмена). Новый GUI без выбора
+получает категорию `none`, старые GUI без поля `category` — тоже. Редактор
+скелета показывает как встроенные, так и зарегистрированные аддонами
+типы; неизвестный тип показан как `BARRIER` и остаётся заблокированным.
+
+**Файлы.** В `tables/<name>.yml` или `custom/<name>.yml` хранится
+`category: myaddon:machines` и список ID слотов `skeleton:`.
+Название, иконка и описание категории живут в отдельном
+`plugins/CustomGuiReworked/categories.yml`:
+
+```yaml
+categories:
+  - id: 'myaddon:machines'
+    name: '§6Механизмы'
+    icon: FURNACE
+    description: '§7Интерфейсы станков'
+```
+
+`/gui reload` перечитывает эти файлы после ручного изменения. Если
+описания категории нет, меню всё равно покажет её ID; удаление описания
+не сбрасывает категорию у GUI. `none` — зарезервированное значение, а не
+запись в `categories.yml`.
+
+**Разработчику.** API позволяет отдельно зарегистрировать описание
+категории и назначить её GUI, а типу слота задать собственные правила
+и связь с другими типами:
+
+```java
+GuiCategory machines = CustomGuiAPI.registerCategory(new GuiCategory(
+        "myaddon:machines", "§6Механизмы", Material.FURNACE, "§7Станки"));
+SlotType ore = CustomGuiAPI.registerSlotType(SlotType.builder("myaddon:ore")
+        .allowInsert(true).allowTake(true).persist(true)
+        .acceptInsert(ctx -> ctx.item().getType() == Material.IRON_ORE)
+        .build());
+SlotType indicator = CustomGuiAPI.registerSlotType(SlotType.builder("myaddon:indicator")
+        .track(true).watch(ore)
+        .onRelatedChange(relation -> CustomGuiAPI.setSlotItem(
+                relation.change().getInventory(), relation.relatedSlot(),
+                relation.change().getNewItem() == null ? null : new ItemStack(Material.LIME_DYE)))
+        .build()); // индикатор нельзя забрать — безопасный пример, не выдача результата
+Gui gui = GuiBuilder.named("ore_status").size(27).category(machines)
+        .slot(13, ore).slot(22, indicator).build();
+CustomGuiAPI.registerGui(gui, true);
+```
+
+`watch(ore)` направлен от изменившегося входа к индикатору **в том же
+открытом GUI**; `onRelatedChange` получает и исходное событие, и номер
+слота наблюдателя. Содержимое входа сохраняется, индикатора — нет.
+Тип с `allowInsert(true)` обязан иметь `persist(true)`. Только ID типа
+сохраняется в YAML: колбэки нужно регистрировать при каждом `onEnable`;
+до регистрации/после отключения слот остаётся запертым без потери данных.
+`SlotType` теперь **класс, не enum** — сторонние аддоны нужно пересобрать
+под новый jar. Подробные правила, варианты callback'ов, безопасность и
+полный пример аддона: [API.md §4.1–4.2](API.md#41-категории-в-gui-и-редакторе),
+[EXAMPLES.md §9](EXAMPLES.md#9-категории-и-пользовательские-типы-слотов).
 
 ---
 
@@ -229,8 +301,8 @@ integration:
 
 ### Подключение зависимости
 
-CustomGuiReworked публикуется через **JitPack** — он собирает jar прямо из GitHub по тегу. Файл [`jitpack.yml`](jitpack.yml) указывает JDK 25. Артефакт доступен как `com.github.amper24:CustomGuiReworked:<version>`. Версию бери из [`build.gradle`](build.gradle) `version = '2.4.0'` или из релизов GitHub. Можно указывать:
-- конкретный тег: `2.4.0`, `2.2.0`
+CustomGuiReworked публикуется через **JitPack** — он собирает jar прямо из GitHub по тегу. Файл [`jitpack.yml`](jitpack.yml) указывает JDK 25. Артефакт доступен как `com.github.amper24:CustomGuiReworked:<version>`. Версию бери из [`build.gradle`](build.gradle) `version = '2.4.5'` или из релизов GitHub. Можно указывать:
+- конкретный тег: `2.4.5` (категории и свои типы слотов), `2.4.0` (предыдущая версия)
 - короткий хеш коммита: `a1b2c3d`
 - ветку: `main-SNAPSHOT` (последний коммит main, кэшируется на 24ч)
 
@@ -269,7 +341,7 @@ dependencies {
     compileOnly("io.papermc.paper:paper-api:26.2.build.123-stable")
 
     // CustomGuiReworked — только для компиляции
-    compileOnly("com.github.amper24:CustomGuiReworked:2.4.0")
+    compileOnly("com.github.amper24:CustomGuiReworked:2.4.5")
 
     // Для тестов (если нужны) — отдельно, как в этом проекте:
     testCompileOnly("io.papermc.paper:paper-api:26.2.build.123-stable")
@@ -317,7 +389,7 @@ repositories {
 
 dependencies {
     compileOnly 'io.papermc.paper:paper-api:26.2.build.123-stable'
-    compileOnly 'com.github.amper24:CustomGuiReworked:2.4.0'
+    compileOnly 'com.github.amper24:CustomGuiReworked:2.4.5'
 
     testCompileOnly 'io.papermc.paper:paper-api:26.2.build.123-stable'
     testImplementation 'org.junit.jupiter:junit-jupiter:6.0.3'
@@ -372,7 +444,7 @@ shadowJar {
         <maven.compiler.target>25</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <paper.version>26.2.build.123-stable</paper.version>
-        <cgui.version>2.4.0</cgui.version>
+        <cgui.version>2.4.5</cgui.version>
     </properties>
 
     <repositories>
@@ -469,26 +541,26 @@ mvn clean package -U   # -U форсит проверку JitPack
 
 Если нет доступа к Maven-репозиториям:
 
-1. Скачай `CustomGuiReworked-2.4.0.jar` из релизов GitHub в папку `libs/` твоего проекта.
+1. Скачай `CustomGuiReworked-2.4.5.jar` из релизов GitHub в папку `libs/` твоего проекта.
 2. Подключи:
 
 **Gradle Kotlin:**
 ```kotlin
 dependencies {
-    compileOnly(files("libs/CustomGuiReworked-2.4.0.jar"))
+    compileOnly(files("libs/CustomGuiReworked-2.4.5.jar"))
 }
 ```
 
 **Gradle Groovy:**
 ```groovy
 dependencies {
-    compileOnly files('libs/CustomGuiReworked-2.4.0.jar')
+    compileOnly files('libs/CustomGuiReworked-2.4.5.jar')
 }
 ```
 
 **Maven (system scope — не рекомендуется, лучше install):**
 ```bash
-mvn install:install-file -Dfile=libs/CustomGuiReworked-2.4.0.jar -DgroupId=com.github.amper24 -DartifactId=CustomGuiReworked -Dversion=2.4.0 -Dpackaging=jar
+mvn install:install-file -Dfile=libs/CustomGuiReworked-2.4.5.jar -DgroupId=com.github.amper24 -DartifactId=CustomGuiReworked -Dversion=2.4.5 -Dpackaging=jar
 ```
 А потом зависимость как выше с `provided`.
 
@@ -538,11 +610,15 @@ public void onEnable() {
 
 | Что указать | Пример | Когда использовать |
 |---|---|---|
-| Релиз-тег | `2.4.0` | Продакшн, стабильно |
-| Предыдущий релиз | `2.2.0` | Если нужна совместимость |
+| Релиз-тег | `2.4.5` | Категории и расширяемые типы слотов |
+| Предыдущий релиз | `2.4.0` | Без категорий и нового API типов |
 | Коммит | `a1b2c3d` (7 символов) | Тест фикса до релиза |
 | Ветка | `main-SNAPSHOT` | Разработка, всегда последний main |
 | PR | `PR-123-SNAPSHOT` | Тест PR (JitPack поддерживает) |
+
+**Для категорий и собственных `SlotType` используйте `2.4.5`** и в
+аддоне, и на сервере. Пересоберите аддоны, использовавшие прежний
+`SlotType enum`: бинарной совместимости с `2.4.0` нет.
 
 Актуальную версию смотри в:
 - [`build.gradle`](build.gradle) `version = '...'`
@@ -558,7 +634,7 @@ public void onEnable() {
 - **`IllegalStateException: service not registered`** — ты вызываешь API до включения CustomGuiReworked. Решение: `softdepend` + вызов из `onEnable`, а не из конструктора / static init.
 - **`ClassNotFoundException: GuiService`** — забыл `compileOnly` зависимость или не добавил JitPack репозиторий.
 - **Jar вырос на 5+ MB** — ты зашейдил CustomGuiReworked. Проверь `compileOnly` / `provided` и `shadowJar { exclude }`.
-- **JitPack 401 / не находит артефакт** — первая сборка ещё идёт. Открой https://jitpack.io/com/github/amper24/CustomGuiReworked/2.4.0/build.log и дождись `Build OK`.
+- **JitPack 401 / не находит артефакт** — первая сборка ещё идёт. Открой https://jitpack.io/com/github/amper24/CustomGuiReworked/2.4.5/build.log и дождись `Build OK`.
 - **`UnsupportedClassVersionError`** — собираешь под Java 25, а сервер на Java 21. Этот плагин требует **Java 25** — см. [`jitpack.yml`](jitpack.yml) и `targetJavaVersion = 25` в [`build.gradle`](build.gradle).
 
 ### Доступ к сервису
@@ -593,13 +669,14 @@ if (CustomGuiAPI.isInitialized()) {
 | `skeleton` | `List<SlotType>` | Тип каждого слота — см. [`SlotType.java`](src/main/java/dev/moonaticks/customGuiReworked/api/SlotType.java) |
 | `design` | `List<String>` | Payloads предметов дизайна — [`Codecs.java`](src/main/java/dev/moonaticks/customGuiReworked/codec/Codecs.java) |
 | `storage` | `StorageType` | Тип хранилища — [`StorageType.java`](src/main/java/dev/moonaticks/customGuiReworked/api/StorageType.java) |
+| `category` | `String` | ID категории (по умолчанию `none`), описание — в `categories.yml` |
 | `commands` | `List<SlotCommand>` | Команды слотов — [`SlotCommand.java`](src/main/java/dev/moonaticks/customGuiReworked/api/SlotCommand.java) |
 | `blockIds` | `Set<String>` | Привязки блоков — [`BlockHookManager.java`](src/main/java/dev/moonaticks/customGuiReworked/integration/BlockHookManager.java) |
 | `source` | `Source` | `TABLE` (`tables/`), `CUSTOM` (`custom/`), `RUNTIME` (память) |
 
 Ключевые методы `Gui`:
-- `title(String)`, `slots(int)`, `storage(StorageType)`, `source(Source)`
-- `slotType(int)`, `setSlotType(int, SlotType)`, `replaceSkeleton(List)`, `resetSkeleton()`
+- `title(String)`, `slots(int)`, `storage(StorageType)`, `category(String)`, `category(GuiCategory)`, `source(Source)`
+- `slotType(int)`, `setSlotType(int, SlotType)`, `slotsOf(SlotType)`, `replaceSkeleton(List)`, `resetSkeleton()`
 - `designAt(int)`, `setDesignAt(int, String)`, `setDesignItem(int, ItemStack)`, `replaceDesign(List)`, `resetDesign()`
 - `commands()`, `addCommand(SlotCommand)`, `commandsForSlot(int)`, `removeCommand(int, int)`
 - `blockIds()`, `addBlockId(String)`, `removeBlockId(String)`
@@ -614,6 +691,7 @@ Gui gui = GuiBuilder.named("shop")
         .title("§6Shop")
         .size(27) // сначала size!
         .storage(StorageType.PERSONAL)
+        .category("shops") // необязательно; по умолчанию none
         .slot(10, SlotType.CONTAINER)
         .slots(List.of(11,12,13), SlotType.CONTAINER)
         .slot(20, SlotType.RESULT)
@@ -646,13 +724,31 @@ boolean deleteGui(String name)              // файл удаляет, данн
 void saveGui(Gui gui)
 ```
 
+**Категории и расширяемые типы слотов** (доступны только в новой сборке):
+```java
+GuiCategory registerCategory(GuiCategory category)                 // categories.yml
+GuiCategory registerCategory(GuiCategory category, boolean persist) // false = только память
+boolean unregisterCategory(String id)                              // оставляет привязки GUI
+GuiCategory getCategory(String id)
+List<GuiCategory> getCategories()                                   // только описания
+SlotType registerSlotType(SlotType type)                            // SlotType.builder(id).build()
+boolean unregisterSlotType(String id)
+SlotType getSlotType(String id)                                     // null, если не зарегистрирован
+List<SlotType> getSlotTypes()                                       // включая встроенные
+```
+Правила и пример `watch(...)` — [API.md §4.2](API.md#42-собственные-типы-слотов-и-связи-между-ними).
+
 **Открытие:**
 ```java
 void openGui(Player player, String name)
 void openGui(Player player, String name, Location blockLocation) // для BLOCK
 void openGui(Player player, String name, StorageType storageOverride) // TEMPORARY override
 Gui getOpenGui(Player player)
+boolean setSlotItem(Inventory inventory, int slot, ItemStack item)  // отслеживаемый слот открытого GUI
 ```
+`setSlotItem` планирует сохранение (если слот персистентный) и событие
+изменения; `null`/`AIR` очищает слот. Для закрытого функционального блока
+используйте `setBlockSlotItem`. Подробности — [API.md §4.2](API.md#42-собственные-типы-слотов-и-связи-между-ними).
 
 **Блоки:**
 ```java
@@ -735,7 +831,7 @@ CustomGuiAPI.unregisterBlockGui("itemsadder:ruby_ore");
 | [`GuiCloseEvent`](src/main/java/dev/moonaticks/customGuiReworked/api/event/GuiCloseEvent.java) | после close + save | нет | `getPlayer()`, `getGui()`, `getStorageKey()` |
 | [`GuiSlotClickEvent`](src/main/java/dev/moonaticks/customGuiReworked/api/event/GuiSlotClickEvent.java) | клик по верхнему инвентарю, включая DESIGN | два уровня | `getSlot()`, `getSlotType()`, `getClick()`, `getAction()`, `getCurrentItem()`, `getCursor()`, `getHotbarButton()`, `getHandle()`, `isTopInventory()`, `setCancelled()` (только команды), `setInteractionCancelled()` (команды + ванильный клик) |
 | [`GuiDragEvent`](src/main/java/dev/moonaticks/customGuiReworked/api/event/GuiDragEvent.java) | drag по слотам | **да** | `getTopSlots()` (immutable), `getHandle()` |
-| [`GuiSlotChangedEvent`](src/main/java/dev/moonaticks/customGuiReworked/api/event/GuiSlotChangedEvent.java) | содержимое слота реально изменилось (следующий тик; DESIGN не отслеживается) | нет | `getSlot()`, `getSlotType()`, `getOldItem()`, `getNewItem()` — фактические «было/стало»; для блоков есть более ранний `FunctionalBlockHandler#onItemChanged` |
+| [`GuiSlotChangedEvent`](src/main/java/dev/moonaticks/customGuiReworked/api/event/GuiSlotChangedEvent.java) | содержимое отслеживаемого слота реально изменилось (обычно следующий тик; в том числе custom `track(true)`) | нет | `getSlot()`, `getSlotType()`, `getOldItem()`, `getNewItem()` — фактические «было/стало»; для блоков есть более ранний `FunctionalBlockHandler#onItemChanged` |
 
 ```java
 @EventHandler
@@ -835,6 +931,7 @@ CustomGuiReworked/
 │   │   │   ├── CustomGuiAPI.java
 │   │   │   ├── Gui.java
 │   │   │   ├── GuiBuilder.java
+│   │   │   ├── GuiCategory.java
 │   │   │   ├── SlotType.java
 │   │   │   ├── StorageType.java
 │   │   │   ├── SlotCommand.java
@@ -873,9 +970,9 @@ CustomGuiReworked/
 - **JDK 25**, Gradle 9 (wrapper в репо) — см. [`build.gradle`](build.gradle) `targetJavaVersion = 25`
 - `./gradlew build` → `build/libs/CustomGuiReworked.jar` (и `-sources.jar` благодаря `withSourcesJar()`)
 - `./gradlew runServer` — Paper 26.2 тестовый сервер (плагин `xyz.jpenilla.run-paper`)
-- `./gradlew test` — 150 тестов, см. [`src/test/`](src/test/java/dev/moonaticks/customGuiReworked/)
+- `./gradlew test` — unit-тесты (в том числе категорий и пользовательских слотов), см. [`src/test/`](src/test/java/dev/moonaticks/customGuiReworked/)
 
-Публикация: JitPack по тегу — `com.github.amper24:CustomGuiReworked:2.4.0` (первая сборка ~1-2 мин).
+Публикация: JitPack по тегу — `com.github.amper24:CustomGuiReworked:2.4.5` (первая сборка ~1-2 мин).
 
 ---
 

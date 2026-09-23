@@ -3,6 +3,7 @@ package dev.moonaticks.customGuiReworked;
 import dev.moonaticks.customGuiReworked.api.CustomGuiAPI;
 import dev.moonaticks.customGuiReworked.api.GuiService;
 import dev.moonaticks.customGuiReworked.api.GuiServiceImpl;
+import dev.moonaticks.customGuiReworked.api.SlotType;
 import dev.moonaticks.customGuiReworked.command.GuiCommand;
 import dev.moonaticks.customGuiReworked.command.GuiTabCompleter;
 import dev.moonaticks.customGuiReworked.codec.BukkitItemCodec;
@@ -12,6 +13,7 @@ import dev.moonaticks.customGuiReworked.editor.EditorHolder;
 import dev.moonaticks.customGuiReworked.editor.EditorListener;
 import dev.moonaticks.customGuiReworked.editor.EditorManager;
 import dev.moonaticks.customGuiReworked.api.functional.FunctionalBlockRegistry;
+import dev.moonaticks.customGuiReworked.gui.CategoryRegistry;
 import dev.moonaticks.customGuiReworked.gui.GuiHolder;
 import dev.moonaticks.customGuiReworked.gui.GuiOpener;
 import dev.moonaticks.customGuiReworked.gui.GuiRegistry;
@@ -65,6 +67,7 @@ public final class CustomGuiReworked extends JavaPlugin {
 
     private LanguageManager languageManager;
     private GuiRegistry registry;
+    private CategoryRegistry categories;
     private StorageService storage;
     private GuiOpener opener;
     private EditorManager editor;
@@ -106,6 +109,8 @@ public final class CustomGuiReworked extends JavaPlugin {
                     + "Install NBTAPI for full NBT fidelity.");
         }
 
+        categories = new CategoryRegistry(getDataFolder(), getLogger());
+        categories.loadAll();
         registry = new GuiRegistry(this);
         registry.loadAll();
 
@@ -185,6 +190,7 @@ public final class CustomGuiReworked extends JavaPlugin {
             registeredService = null;
         }
         CustomGuiAPI.shutdown();
+        SlotType.clearCustom();
         Codecs.reset();
     }
 
@@ -212,6 +218,7 @@ public final class CustomGuiReworked extends JavaPlugin {
         // перепроверяем версию файлов на диске перед чтением строк.
         saveDefaultLanguageFiles();
         languageManager.load();
+        categories.loadAll();
         registry.loadAll();
     }
 
@@ -296,6 +303,10 @@ public final class CustomGuiReworked extends JavaPlugin {
 
     public GuiRegistry registry() {
         return registry;
+    }
+
+    public CategoryRegistry categories() {
+        return categories;
     }
 
     public StorageService storage() {

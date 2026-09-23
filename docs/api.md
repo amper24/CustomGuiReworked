@@ -10,6 +10,9 @@ CustomGuiReworked — это не только «окна с предметам�
 | Задача | API |
 |---|---|
 | Создать / изменить / удалить GUI | `GuiBuilder`, `registerGui(gui[, persist])`, `unregisterGui`, `deleteGui`, `loadGui`, `saveGui`, `createGui` |
+| Категория GUI для `/gui`/редактора | `GuiCategory`, `registerCategory`, `getCategory`, `getCategories`, `unregisterCategory`, `GuiBuilder.category` |
+| Тип слота со своими правилами/связями | `SlotType.builder`, `registerSlotType`, `unregisterSlotType`, `getSlotType(s)`, `watch`, `onRelatedChange` |
+| Изменить отслеживаемый слот открытого GUI | `setSlotItem(inventory, slot, item)` |
 | Открыть GUI | `openGui(player, name)`, `openGui(player, name, blockLocation)`, `openGui(player, name, StorageType)` — `getOpenGui(player)` |
 | Хранилище без открытого GUI | `readStorage(type, owner, table)`, `writeStorage(...)`, `deleteStorage(...)` |
 | **Название/дизайн окна только для одного игрока** | `setLocalTitle`, `getLocalTitle`, `clearLocalTitle`; `setLocalDesign`, `setLocalDesigns`, `clearLocalDesign`, `clearAllLocalDesigns`, `getLocalDesign` (+ per-блок варианты с `Location`) |
@@ -21,6 +24,50 @@ CustomGuiReworked — это не только «окна с предметам�
 | Стрелка прогресса / анимация дизайна | `DesignAnimation` (кадры по кругу, per-плеер/per-блок), `DesignAnimation.stageForProgress(progress, total, stages)` |
 | Кто смотрит блок / на каком блоке игрок | `getViewers(block)`, `getOpenBlockLocation(player)` |
 | Анти-дюп дизайна | `prepareDesignItem(item)` |
+
+## Категории и собственные типы слотов
+
+> Категории и новые типы доступны начиная с **`2.4.5`**. Аддону нужны
+> совпадающие jar при сборке и запуске. Прежний `SlotType` был `enum`;
+> пересоберите сторонние плагины.
+
+- Новый GUI получает `category: none`. В `/gui` выбираются **Все**,
+  **Без категории** и категории с именами/иконками; поиск и пагинация
+  продолжают работать. В редакторе категория выбирается или создаётся
+  через чат `id Название`. ID в YAML самого GUI, описания — в
+  `plugins/CustomGuiReworked/categories.yml`; неизвестный ID остаётся
+  видимым. `registerCategory(category, false)` — только в памяти.
+- `SlotType.builder("myaddon:input")` создаёт тип с правилами
+  `allowInsert/allowTake`, `persist/track`, фильтрами `acceptInsert`/
+  `acceptTake` и обработчиками `onClick/onChange`. Для вставки обязательно
+  `persist(true)`; неперсистентному выходу нужен `track(true)`.
+  `watch(input).onRelatedChange(...)` — одностороннее уведомление о
+  **реальном** изменении входа в том же GUI (получаете индекс исходного
+  слота и слота-получателя). Чтобы обновить содержимое открытого слота,
+  используйте `setSlotItem`. Если описание типа отсутствует, ID остаётся
+  в файле, но слот блокируется без удаления сохранённых предметов.
+
+```java
+GuiCategory category = CustomGuiAPI.registerCategory(
+        new GuiCategory("myaddon:machines", "§6Механизмы", Material.FURNACE, "§7Станки"));
+SlotType input = CustomGuiAPI.registerSlotType(SlotType.builder("myaddon:ore")
+        .allowInsert(true).allowTake(true).persist(true)
+        .acceptInsert(ctx -> ctx.item().getType() == Material.IRON_ORE).build());
+SlotType indicator = CustomGuiAPI.registerSlotType(SlotType.builder("myaddon:indicator")
+        .track(true).watch(input)
+        .onRelatedChange(relation -> CustomGuiAPI.setSlotItem(
+                relation.change().getInventory(), relation.relatedSlot(),
+                relation.change().getNewItem() == null ? null : new ItemStack(Material.LIME_DYE)))
+        .build()); // индикатор нельзя забрать
+Gui gui = GuiBuilder.named("ore_status").size(27).category(category)
+        .slot(13, input).slot(22, indicator).build();
+CustomGuiAPI.registerGui(gui, true);
+```
+
+Полный список параметров, правила `onClick`, жизненный цикл и YAML —
+[API.md §4.1–4.2](https://github.com/amper24/CustomGuiReworked/blob/main/API.md#41-категории-в-gui-и-редакторе);
+готовый аддон с `GuiOpenEvent` —
+[EXAMPLES.md §9](https://github.com/amper24/CustomGuiReworked/blob/main/EXAMPLES.md#9-категории-и-пользовательские-типы-слотов).
 
 ## События
 
@@ -35,7 +82,7 @@ CustomGuiReworked — это не только «окна с предметам�
 ## Минимальный пример: «первый GUI за 10 строк»
 
 ```java
-// build.gradle: compileOnly 'com.github.amper24:CustomGuiReworked:2.4.0'
+// build.gradle: compileOnly 'com.github.amper24:CustomGuiReworked:2.4.5'
 // plugin.yml:    softdepend: [CustomGuiReworked]
 
 @Override

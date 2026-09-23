@@ -44,7 +44,7 @@ public class ItemDrops {
         // незабранного «результата») игроку не принадлежит.
         for (int i = 0; i < inventory.getSize(); i++) {
             SlotType type = gui.slotType(i);
-            if (type == SlotType.DESIGN || type == SlotType.RESULT) {
+            if (!type.isPersistable()) {
                 continue;
             }
             ItemStack item = inventory.getItem(i);
@@ -61,7 +61,7 @@ public class ItemDrops {
         // Чистим инвентарь, чтобы предметы не «проявились» повторно
         for (int i = 0; i < inventory.getSize(); i++) {
             SlotType type = gui.slotType(i);
-            if (type != SlotType.DESIGN && type != SlotType.RESULT) {
+            if (type.isPersistable()) {
                 inventory.setItem(i, null);
             }
         }

@@ -2,6 +2,7 @@ package dev.moonaticks.customGuiReworked.manager;
 
 import dev.moonaticks.customGuiReworked.CustomGuiReworked;
 import dev.moonaticks.customGuiReworked.api.Gui;
+import dev.moonaticks.customGuiReworked.api.GuiCategory;
 import dev.moonaticks.customGuiReworked.gui.GuiOpener;
 import dev.moonaticks.customGuiReworked.gui.GuiRegistry;
 import dev.moonaticks.customGuiReworked.editor.EditorManager;
@@ -25,8 +26,8 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Меню управления GUI: список с поиском/пагинацией, экран опций
- * (открыть/редактировать/перезагрузить/удалить), создание нового GUI.
+ * Меню управления GUI: список с поиском, фильтром категорий и пагинацией,
+ * экран опций (открыть/редактировать/перезагрузить/удалить), создание GUI.
  */
 public class ManagerMenu {
 
@@ -77,7 +78,7 @@ public class ManagerMenu {
     }
 
     private void renderList(Player player, ManagerSession session) {
-        List<String> names = filteredNames(session.search());
+        List<String> names = filteredNames(session);
         int pages = Math.max(1, (names.size() + PER_PAGE - 1) / PER_PAGE);
         if (session.page() >= pages) {
             session.page(pages - 1);
@@ -92,6 +93,9 @@ public class ManagerMenu {
         }
 
         // Верхняя панель
+        inventory.setItem(4, item(Material.COMPASS,
+                String.format(lang.raw("manager.btn.category"), categoryName(session.category())),
+                lang.raw("manager.btn.categoryHint")));
         inventory.setItem(6, item(Material.PAPER, lang.raw("manager.btn.search"), lang.raw("manager.btn.searchHint")));
         inventory.setItem(7, item(Material.CHEST, lang.raw("manager.btn.create"), lang.raw("manager.btn.createHint")));
         inventory.setItem(8, item(Material.BLAZE_POWDER, lang.raw("manager.btn.reload"), lang.raw("manager.btn.reloadHint")));
@@ -119,6 +123,8 @@ public class ManagerMenu {
         String search = session.search();
         statusLore.add(SERIALIZER.deserialize(search == null ? lang.raw("manager.status.noSearch")
                 : String.format(lang.raw("manager.status.search"), search)));
+        statusLore.add(SERIALIZER.deserialize(String.format(lang.raw("manager.status.category"),
+                categoryName(session.category()))));
         inventory.setItem(39, item(Material.CLOCK, lang.raw("manager.btn.status"), statusLore.toArray(new Component[0])));
 
         boolean hasPrev = session.page() > 0;
@@ -127,6 +133,48 @@ public class ManagerMenu {
         inventory.setItem(41, item(Material.PAPER, String.format(lang.raw("manager.btn.page"), session.page() + 1, pages)));
         inventory.setItem(42, item(hasNext ? Material.ARROW : Material.GRAY_DYE, lang.raw("manager.btn.next")));
 
+        holder.attach(inventory);
+        player.openInventory(inventory);
+    }
+
+    private void renderCategories(Player player, ManagerSession session) {
+        List<String> ids = categoryIds();
+        int pages = Math.max(1, (ids.size() + PER_PAGE - 1) / PER_PAGE);
+        if (session.categoryPage() >= pages) {
+            session.categoryPage(pages - 1);
+        }
+        ManagerHolder holder = new ManagerHolder(ManagerHolder.Screen.CATEGORIES, null);
+        Inventory inventory = Bukkit.createInventory(holder, 45,
+                SERIALIZER.deserialize(lang.raw("manager.title.categories")));
+        ItemStack filler = item(Material.BLACK_STAINED_GLASS_PANE, lang.raw("manager.filler"));
+        for (int i = 0; i < 45; i++) {
+            inventory.setItem(i, filler);
+        }
+        inventory.setItem(2, item(Material.NETHER_STAR, lang.raw("manager.category.all")));
+        inventory.setItem(3, item(Material.BARRIER, lang.raw("manager.category.none")));
+        int start = session.categoryPage() * PER_PAGE;
+        for (int i = 0; i < PER_PAGE && start + i < ids.size(); i++) {
+            String id = ids.get(start + i);
+            GuiCategory category = plugin.categories().get(id);
+            String description = category == null ? "" : category.description();
+            Material material = category == null ? Material.BOOK : category.icon();
+            int count = (int) registry.all().stream().filter(gui -> gui.category().equals(id)).count();
+            List<Component> lore = new ArrayList<>();
+            if (!description.isBlank()) {
+                lore.add(SERIALIZER.deserialize(description));
+            }
+            lore.add(SERIALIZER.deserialize(String.format(lang.raw("manager.category.count"), count)));
+            int slot = 9 + i;
+            inventory.setItem(slot, item(material, categoryName(id), lore.toArray(new Component[0])));
+            holder.putCategory(slot, id);
+        }
+        inventory.setItem(40, item(session.categoryPage() > 0 ? Material.ARROW : Material.GRAY_DYE,
+                lang.raw("manager.btn.prev")));
+        inventory.setItem(41, item(Material.PAPER,
+                String.format(lang.raw("manager.btn.page"), session.categoryPage() + 1, pages)));
+        inventory.setItem(42, item(session.categoryPage() + 1 < pages ? Material.ARROW : Material.GRAY_DYE,
+                lang.raw("manager.btn.next")));
+        inventory.setItem(44, item(Material.BARRIER, lang.raw("manager.options.back")));
         holder.attach(inventory);
         player.openInventory(inventory);
     }
@@ -161,6 +209,7 @@ public class ManagerMenu {
         infoLore.add(SERIALIZER.deserialize(String.format(lang.raw("manager.gui.title"), gui.title())));
         infoLore.add(SERIALIZER.deserialize(String.format(lang.raw("manager.gui.size"), gui.slots())));
         infoLore.add(SERIALIZER.deserialize(String.format(lang.raw("manager.gui.storage"), gui.storage().id())));
+        infoLore.add(SERIALIZER.deserialize(String.format(lang.raw("manager.gui.category"), categoryName(gui.category()))));
         infoLore.add(SERIALIZER.deserialize(String.format(lang.raw("manager.gui.blocks"), gui.blockIds().size())));
         infoLore.add(SERIALIZER.deserialize(String.format(lang.raw("manager.gui.commands"), gui.commands().size())));
         inventory.setItem(13, item(Material.BOOK, lang.raw("manager.options.info"), infoLore.toArray(new Component[0])));
@@ -173,6 +222,39 @@ public class ManagerMenu {
     }
 
     // ================= действия (вызываются из слушателя) =================
+
+    /** Выбор категории (null — показать все). Поиск сохраняется. */
+    public void onCategorySelect(Player player, String id) {
+        ManagerSession session = sessions.get(player.getUniqueId());
+        if (session == null) {
+            return;
+        }
+        session.category(id);
+        renderList(player, session);
+    }
+
+    public void onCategoriesClick(Player player) {
+        ManagerSession session = sessions.get(player.getUniqueId());
+        if (session != null) {
+            session.categoryPage(0);
+            renderCategories(player, session);
+        }
+    }
+
+    public void onCategoryPaging(Player player, boolean next) {
+        ManagerSession session = sessions.get(player.getUniqueId());
+        if (session != null) {
+            session.categoryPage(session.categoryPage() + (next ? 1 : -1));
+            renderCategories(player, session);
+        }
+    }
+
+    public void onCategoryBack(Player player) {
+        ManagerSession session = sessions.get(player.getUniqueId());
+        if (session != null) {
+            renderList(player, session);
+        }
+    }
 
     /** Клик по элементу списка GUI. */
     public void onGuiClick(Player player, String guiName, org.bukkit.event.inventory.ClickType click) {
@@ -378,16 +460,45 @@ public class ManagerMenu {
         renderList(player, session);
     }
 
-    private List<String> filteredNames(String search) {
+    List<String> filteredNames(ManagerSession session) {
         List<String> names = new ArrayList<>();
-        String needle = search == null ? null : search.toLowerCase(Locale.ROOT);
+        String needle = session.search() == null ? null : session.search().toLowerCase(Locale.ROOT);
         for (String name : registry.names()) {
-            if (needle == null || name.toLowerCase(Locale.ROOT).contains(needle)) {
+            Gui gui = registry.get(name);
+            if (gui != null && (needle == null || name.toLowerCase(Locale.ROOT).contains(needle))
+                    && (session.category() == null || session.category().equals(gui.category()))) {
                 names.add(name);
             }
         }
         names.sort(String.CASE_INSENSITIVE_ORDER);
         return names;
+    }
+
+    /** Зарегистрированные и фактически используемые категории (без none). */
+    List<String> categoryIds() {
+        java.util.Set<String> ids = new java.util.HashSet<>();
+        for (GuiCategory category : plugin.categories().all()) {
+            ids.add(category.id());
+        }
+        for (Gui gui : registry.all()) {
+            if (!GuiCategory.NONE.equals(gui.category())) {
+                ids.add(gui.category());
+            }
+        }
+        List<String> sorted = new ArrayList<>(ids);
+        sorted.sort(String.CASE_INSENSITIVE_ORDER);
+        return sorted;
+    }
+
+    private String categoryName(String id) {
+        if (id == null) {
+            return lang.raw("manager.category.all");
+        }
+        if (GuiCategory.NONE.equals(id)) {
+            return lang.raw("manager.category.none");
+        }
+        GuiCategory category = plugin.categories().get(id);
+        return category == null ? id : category.displayName();
     }
 
     private ItemStack guiItem(Gui gui) {
@@ -400,6 +511,7 @@ public class ManagerMenu {
         lore.add(SERIALIZER.deserialize(String.format(lang.raw("manager.gui.title"), gui.title())));
         lore.add(SERIALIZER.deserialize(String.format(lang.raw("manager.gui.size"), gui.slots())));
         lore.add(SERIALIZER.deserialize(String.format(lang.raw("manager.gui.storage"), gui.storage().id())));
+        lore.add(SERIALIZER.deserialize(String.format(lang.raw("manager.gui.category"), categoryName(gui.category()))));
         lore.add(SERIALIZER.deserialize(String.format(lang.raw("manager.gui.blocks"), gui.blockIds().size())));
         lore.add(SERIALIZER.deserialize(String.format(lang.raw("manager.gui.commands"), gui.commands().size())));
         lore.add(SERIALIZER.deserialize(lang.raw("manager.gui.source." + gui.source().name().toLowerCase(Locale.ROOT))));

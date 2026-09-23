@@ -22,6 +22,7 @@ import java.util.regex.Pattern;
  *   <li><b>скелета</b> — список {@link SlotType}, по одному на каждый слот;</li>
  *   <li><b>дизайна</b> — payloadы предметов для дизайн-слотов (см. {@link dev.moonaticks.customGuiReworked.codec.Codecs});</li>
  *   <li><b>типа хранения</b> — {@link StorageType};</li>
+ *   <li><b>категории</b> — ID раздела меню /gui, по умолчанию {@code none};</li>
  *   <li><b>команд</b> — список {@link SlotCommand};</li>
  *   <li><b>ID кастомных блоков</b> — привязки к блокам ItemsAdder/CraftEngine.</li>
  * </ul>
@@ -56,6 +57,8 @@ public class Gui {
     /** По слотам: payload предмета дизайна (пустая строка = пусто). Для не-дизайн слотов всегда «». */
     private List<String> design = new ArrayList<>();
     private StorageType storage = StorageType.TEMPORARY;
+    /** Категория в меню управления; "none" — без категории. */
+    private String category = GuiCategory.NONE;
     private List<SlotCommand> commands = new ArrayList<>();
     private final Set<String> blockIds = new LinkedHashSet<>();
     private Source source = Source.TABLE;
@@ -168,6 +171,22 @@ public class Gui {
         return this;
     }
 
+    /** ID категории в меню управления; у новых GUI — {@code none}. */
+    public String category() {
+        return category;
+    }
+
+    /** Назначает категорию по ID (её описание может быть зарегистрировано позже). */
+    public Gui category(String category) {
+        this.category = GuiCategory.normalizeId(category);
+        return this;
+    }
+
+    /** Удобный вариант назначения категории, зарегистрированной через API. */
+    public Gui category(GuiCategory category) {
+        return category(category == null ? null : category.id());
+    }
+
     // ================= скелет =================
 
     /** Непомutable-копия типов слотов (размер = {@link #slots()}). */
@@ -186,7 +205,7 @@ public class Gui {
         }
         List<SlotType> copy = new ArrayList<>(skeleton.size());
         for (SlotType type : skeleton) {
-            copy.add(type == null ? SlotType.DESIGN : type);
+            copy.add(SlotType.resolve(type));
         }
         this.skeleton = copy;
     }
@@ -203,7 +222,18 @@ public class Gui {
         if (slot < 0 || slot >= skeleton.size()) {
             throw new IndexOutOfBoundsException("slot " + slot + " out of bounds for " + slots);
         }
-        skeleton.set(slot, type == null ? SlotType.DESIGN : type);
+        skeleton.set(slot, SlotType.resolve(type));
+    }
+
+    /** Индексы слотов данного типа (для обработчиков связанных типов). */
+    public List<Integer> slotsOf(SlotType type) {
+        List<Integer> result = new ArrayList<>();
+        for (int i = 0; i < skeleton.size(); i++) {
+            if (skeleton.get(i).equals(type)) {
+                result.add(i);
+            }
+        }
+        return result;
     }
 
     /** Сброс скелета: все слоты — дизайн. */

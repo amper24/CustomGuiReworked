@@ -34,7 +34,7 @@ import java.util.UUID;
  * игроков или другие блоки:
  * <ul>
  *   <li>{@code localDesignOverride} — предметы, показываемые вместо
- *       файла в DESIGN/RESULT слотах (O(1)-lookup по слоту);</li>
+ *       файла в DESIGN/RESULT и совместимых кастомных слотах (O(1)-lookup);</li>
  *   <li>{@code localTitleOverride} — название окна, подменяющее
  *       {@link Gui#title()};</li>
  *   <li>{@code blockLocation} — локация блока для сессий с
@@ -45,9 +45,9 @@ import java.util.UUID;
  */
 public class GuiHolder implements InventoryHolder {
 
-    /** Типы слотов, содержимое которых персистится (DESIGN — нет, RESULT — нет). */
+    /** Типы слотов, содержимое которых персистится (встроенные и зарегистрированные). */
     public static boolean isPersistable(SlotType type) {
-        return type == SlotType.CONTAINER || type == SlotType.CRAFT || type == SlotType.FUEL;
+        return type != null && type.isPersistable();
     }
 
     /**
@@ -57,12 +57,12 @@ public class GuiHolder implements InventoryHolder {
      * хотя и не персистятся). DESIGN не отслеживается.
      */
     public static boolean isTracked(SlotType type) {
-        return isPersistable(type) || type == SlotType.RESULT;
+        return type != null && type.isTracked();
     }
 
     /** Типы слотов, допустимые для локальных дизайн-оверрайдов. */
     private static boolean allowsLocalDesign(SlotType type) {
-        return type == SlotType.DESIGN || type == SlotType.RESULT;
+        return type != null && type.allowsLocalDesign();
     }
 
     private final Gui gui;
@@ -77,7 +77,7 @@ public class GuiHolder implements InventoryHolder {
     private final Set<Integer> candidates = new java.util.HashSet<>();
     private boolean allCandidates;
 
-    /** Локальные (per-viewer) дизайн-оверрайды: слот → предмет. DESIGN/RESULT только. */
+    /** Локальные (per-viewer) оверрайды: слот → предмет (типы с localDesign). */
     private final Map<Integer, ItemStack> localDesignOverride = new HashMap<>();
     /** Локальное (per-viewer) название окна; null — использовать {@link Gui#title()}. */
     private String localTitleOverride;
@@ -137,7 +137,8 @@ public class GuiHolder implements InventoryHolder {
     /**
      * Устанавливает локальный предмет в слот (per-viewer, файл GUI не меняется).
      *
-     * <p>Допустимы только DESIGN и RESULT слоты: оверрайды для
+     * <p>Допустимы DESIGN/RESULT и кастомные неперсистентные типы с
+     * {@code localDesign(true)}: оверрайды для
      * CONTAINER/CRAFT/FUEL запрещены, потому что их содержимое
      * персистится в хранилище (виртуальный предмет стал бы реальным
      * и мог быть вынесен из GUI — риск дюпа).
@@ -145,7 +146,7 @@ public class GuiHolder implements InventoryHolder {
      * @param slot индекс слота
      * @param item предмет; null (или AIR) — сбрасывает оверрайд
      * @throws IndexOutOfBoundsException если слот вне диапазона GUI
-     * @throws IllegalArgumentException  если слот не DESIGN/RESULT
+     * @throws IllegalArgumentException  если тип слота не поддерживает localDesign
      */
     public void setLocalDesign(int slot, ItemStack item) {
         checkLocalDesignSlot(slot);
@@ -223,8 +224,7 @@ public class GuiHolder implements InventoryHolder {
         SlotType type = gui.slotType(slot);
         if (!allowsLocalDesign(type)) {
             throw new IllegalArgumentException(
-                    "local design overrides are supported only for DESIGN and RESULT slots, but slot "
-                            + slot + " is " + type);
+                    "local design overrides are unsupported for slot " + slot + " (type " + type + ")");
         }
     }
 

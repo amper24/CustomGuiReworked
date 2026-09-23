@@ -16,6 +16,7 @@ public class ManagerHolder implements InventoryHolder {
 
     public enum Screen {
         LIST,
+        CATEGORIES,
         OPTIONS
     }
 
@@ -23,6 +24,7 @@ public class ManagerHolder implements InventoryHolder {
     private final Screen screen;
     private final String optionGui;
     private final Map<Integer, String> guiBySlot = new HashMap<>();
+    private final Map<Integer, String> categoryBySlot = new HashMap<>();
 
     public ManagerHolder(Screen screen, String optionGui) {
         this.screen = screen;
@@ -54,5 +56,14 @@ public class ManagerHolder implements InventoryHolder {
     /** GUI, лежащий в данном слоте (или null). */
     public String guiAt(int slot) {
         return guiBySlot.get(slot);
+    }
+
+    public void putCategory(int slot, String id) {
+        categoryBySlot.put(slot, id);
+    }
+
+    /** ID категории, закреплённый за кнопкой при отрисовке. */
+    public String categoryAt(int slot) {
+        return categoryBySlot.get(slot);
     }
 }

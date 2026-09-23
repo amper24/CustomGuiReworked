@@ -1,5 +1,7 @@
 package dev.moonaticks.customGuiReworked.manager;
 
+import dev.moonaticks.customGuiReworked.api.GuiCategory;
+
 import java.util.UUID;
 
 /**
@@ -13,6 +15,10 @@ public class ManagerSession {
     private int page;
     /** Поиск по имени (null или пусто — без фильтра). */
     private String search;
+    /** null — все категории, "none" — GUI без категории. */
+    private String category;
+    /** Отдельная страница экрана категорий. */
+    private int categoryPage;
     /** Ждём текст в чат (поиск / имя нового GUI) — меню при этом закрыто. */
     public enum InputMode { NONE, CREATE, SEARCH }
     private InputMode inputMode = InputMode.NONE;
@@ -44,6 +50,23 @@ public class ManagerSession {
 
     public void search(String search) {
         this.search = (search == null || search.isBlank()) ? null : search.trim();
+    }
+
+    public String category() {
+        return category;
+    }
+
+    public void category(String id) {
+        category = id == null ? null : GuiCategory.normalizeId(id);
+        page = 0;
+    }
+
+    public int categoryPage() {
+        return categoryPage;
+    }
+
+    public void categoryPage(int page) {
+        categoryPage = Math.max(0, page);
     }
 
     public InputMode inputMode() {
