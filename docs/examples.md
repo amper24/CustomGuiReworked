@@ -15,6 +15,22 @@
 | [6. Анимация дизайн-слотов](https://github.com/amper24/CustomGuiReworked/blob/main/EXAMPLES.md#6-анимация-дизайн-слотов) | `DesignAnimation` (per-плеер/per-блок), `stageForProgress` |
 | [7. События API](https://github.com/amper24/CustomGuiReworked/blob/main/EXAMPLES.md#7-события-api) | 5 событий, `GuiSlotChangedEvent` «было/стало» |
 | [8. Skript и Denizen](https://github.com/amper24/CustomGuiReworked/blob/main/EXAMPLES.md#8-skript-и-denizen) | скриптовые примеры |
+| [9. Категории и пользовательские типы слотов](https://github.com/amper24/CustomGuiReworked/blob/main/EXAMPLES.md#9-категории-и-пользовательские-типы-слотов) | **готовый Java-аддон**: `GuiCategory`, фильтр руды, `watch`, индикатор, `GuiOpenEvent` |
+
+## Категории и расширяемые слоты
+
+В [EXAMPLES.md §9](https://github.com/amper24/CustomGuiReworked/blob/main/EXAMPLES.md#9-категории-и-пользовательские-типы-слотов)
+приведён полный класс аддона: создание категории «Механизмы»,
+регистрация namespaced слотов `myaddon:ore` и `myaddon:indicator`,
+фильтрация вставки, направленная связь `indicator.watch(ore)` и
+`CustomGuiAPI.setSlotItem(...)` для обновления **незабираемого**
+индикатора. `GuiOpenEvent` рассчитывает его при открытии сохранённого
+меню, а `onDisable` безопасно отключает правила слотов.
+
+Новый API доступен начиная с **`2.4.5`**. Нужна одинаковая версия как
+`compileOnly` и на сервере. Формат YAML, ограничения, порядок callback'ов и миграция
+`SlotType enum → class` разобраны в
+[API.md §4.1–4.2](https://github.com/amper24/CustomGuiReworked/blob/main/API.md#41-категории-в-gui-и-редакторе).
 
 ## Топ-3 примера (кратко)
 

@@ -105,6 +105,37 @@ public interface GuiService {
     /** Сохраняет GUI в файл. */
     void saveGui(Gui gui);
 
+    // ================= категории =================
+
+    /** Регистрирует описание категории (имя, иконка, описание) в categories.yml. */
+    GuiCategory registerCategory(GuiCategory category);
+
+    /** persist=false — описание только в памяти; привязка GUI хранится отдельно. */
+    GuiCategory registerCategory(GuiCategory category, boolean persist);
+
+    /** Удаляет описание, не изменяя category у GUI. */
+    boolean unregisterCategory(String id);
+
+    /** Описание зарегистрированной категории, либо null. */
+    GuiCategory getCategory(String id);
+
+    /** Только описания зарегистрированных категорий (не включая none). */
+    List<GuiCategory> getCategories();
+
+    // ================= расширяемые типы слотов =================
+
+    /** Регистрирует новые правила; возвращает канонический тип для GuiBuilder.slot. */
+    SlotType registerSlotType(SlotType type);
+
+    /** Отключает тип; GUI сохраняет ID, но становится заперт до новой регистрации. */
+    boolean unregisterSlotType(String id);
+
+    /** Зарегистрированный тип, либо null (незарегистрированные ID могут быть в GUI). */
+    SlotType getSlotType(String id);
+
+    /** Зарегистрированные типы (включая встроенные). */
+    List<SlotType> getSlotTypes();
+
     // ================= открытие =================
 
     /** Открывает GUI игроку (BLOCK-хранилище требует блоки — см. ниже). */
@@ -123,6 +154,16 @@ public interface GuiService {
 
     /** GUI, который игрок открыл прямо сейчас, или null. */
     Gui getOpenGui(Player player);
+
+    /**
+     * Программно меняет отслеживаемый слот открытого GUI (в том числе
+     * кастомный output). Запись в хранилище и GuiSlotChangedEvent
+     * произойдут на следующем тике. Не изменяет декоративные слоты.
+     * Для закрытого функционального блока используйте setBlockSlotItem.
+     *
+     * @return false, если инвентарь/слот не поддерживается
+     */
+    boolean setSlotItem(Inventory inventory, int slot, ItemStack item);
 
     // ================= блоки =================
 
@@ -186,7 +227,8 @@ public interface GuiService {
     void clearLocalTitle(Player player);
 
     /**
-     * Устанавливает локальный предмет в DESIGN/RESULT слот открытого GUI.
+     * Устанавливает локальный предмет в DESIGN/RESULT слот или кастомный
+     * неперсистентный слот с localDesign(true) открытого GUI.
      *
      * @param player игрок
      * @param slot   DESIGN/RESULT слот

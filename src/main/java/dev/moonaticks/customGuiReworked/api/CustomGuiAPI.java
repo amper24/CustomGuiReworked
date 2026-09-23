@@ -141,6 +141,49 @@ public final class CustomGuiAPI {
         service().saveGui(gui);
     }
 
+    // ================= категории и типы слотов =================
+
+    /** Описание категории будет сохранено в categories.yml. */
+    public static GuiCategory registerCategory(GuiCategory category) {
+        return service().registerCategory(category);
+    }
+
+    public static GuiCategory registerCategory(GuiCategory category, boolean persist) {
+        return service().registerCategory(category, persist);
+    }
+
+    public static boolean unregisterCategory(String id) {
+        return service().unregisterCategory(id);
+    }
+
+    public static GuiCategory getCategory(String id) {
+        return service().getCategory(id);
+    }
+
+    public static List<GuiCategory> getCategories() {
+        return service().getCategories();
+    }
+
+    /**
+     * Тип сначала описывают через SlotType.builder("plugin:input"), затем
+     * регистрируют. Полученный экземпляр используют в GuiBuilder.slot(...).
+     */
+    public static SlotType registerSlotType(SlotType type) {
+        return service().registerSlotType(type);
+    }
+
+    public static boolean unregisterSlotType(String id) {
+        return service().unregisterSlotType(id);
+    }
+
+    public static SlotType getSlotType(String id) {
+        return service().getSlotType(id);
+    }
+
+    public static List<SlotType> getSlotTypes() {
+        return service().getSlotTypes();
+    }
+
     // ================= открытие =================
 
     public static void openGui(Player player, String name) {
@@ -164,6 +207,11 @@ public final class CustomGuiAPI {
     public static void createAndOpenGui(Player player, String name) {
         createGui(name);
         openGui(player, name);
+    }
+
+    /** Программно меняет отслеживаемый слот открытого GUI (в том числе кастомный output). */
+    public static boolean setSlotItem(Inventory inventory, int slot, ItemStack item) {
+        return service().setSlotItem(inventory, slot, item);
     }
 
     // ================= блоки =================

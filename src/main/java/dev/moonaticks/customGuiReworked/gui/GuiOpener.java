@@ -244,7 +244,7 @@ public class GuiOpener {
     void applyDesign(Inventory inventory, GuiHolder holder) {
         Gui gui = holder.gui();
         for (int i = 0; i < gui.slots(); i++) {
-            if (gui.slotType(i) != SlotType.DESIGN) {
+            if (!gui.slotType(i).isRegistered() || !gui.slotType(i).isDecorative()) {
                 continue;
             }
             ItemStack local = holder.getLocalDesign(i);
@@ -259,7 +259,7 @@ public class GuiOpener {
 
     private void applyStorage(Inventory inventory, Gui gui, String[] stored) {
         for (int i = 0; i < gui.slots(); i++) {
-            if (gui.slotType(i) == SlotType.DESIGN) {
+            if (gui.slotType(i).isDecorative()) {
                 continue;
             }
             String payload = i < stored.length ? stored[i] : null;
@@ -308,7 +308,9 @@ public class GuiOpener {
             return;
         }
         for (int i = 0; i < gui.slots(); i++) {
-            if (gui.slotType(i) != SlotType.DESIGN) {
+            // После unregister содержимое уже открытого слота могло быть
+            // персистентным: не возвращаем его игроку, иначе будет дюп.
+            if (!gui.slotType(i).isRegistered() || !gui.slotType(i).isDecorative()) {
                 continue;
             }
             ItemStack current = inv.getItem(i);
@@ -390,7 +392,7 @@ public class GuiOpener {
         // генерировали бы GuiSlotChangedEvent с виртуальным предметом.
         // Реальное действие игрока (например, забрал результат) по-прежнему
         // даст событие: текущее содержимое больше не совпадёт с baseline.
-        if (holder.gui().slotType(slot) == SlotType.RESULT) {
+        if (GuiHolder.isTracked(holder.gui().slotType(slot)) && holder.gui().slotType(slot).allowsLocalDesign()) {
             String[] baseline = holder.baseline();
             if (baseline != null && slot < baseline.length) {
                 baseline[slot] = Codecs.encode(inventory.getItem(slot));
@@ -593,6 +595,27 @@ public class GuiOpener {
         // (как в кликах: он может использовать актуальное содержимое).
         plugin.dispatcher().onSlotChanged(holder, event);
         Bukkit.getPluginManager().callEvent(event);
+        try {
+            event.getSlotType().handleChange(event);
+        } catch (RuntimeException e) {
+            plugin.getLogger().warning("Slot type '" + event.getSlotType().id() + "' onChange failed: " + e.getMessage());
+        }
+        // Направленные связи: например output.watch(input) уведомляет каждый
+        // output-слот об изменении input. Вызывается и при серверных изменениях.
+        for (int related = 0; related < gui.slots(); related++) {
+            if (related == slot) {
+                continue;
+            }
+            SlotType watcher = gui.slotType(related);
+            if (watcher != null && watcher.watches(event.getSlotType())) {
+                try {
+                    watcher.handleRelatedChange(new SlotType.SlotRelationEvent(event, related));
+                } catch (RuntimeException e) {
+                    plugin.getLogger().warning("Slot type '" + watcher.id()
+                            + "' onRelatedChange failed: " + e.getMessage());
+                }
+            }
+        }
     }
 
     /**

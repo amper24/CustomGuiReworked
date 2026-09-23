@@ -2,6 +2,7 @@ package dev.moonaticks.customGuiReworked.editor;
 
 import dev.moonaticks.customGuiReworked.CustomGuiReworked;
 import dev.moonaticks.customGuiReworked.api.Gui;
+import dev.moonaticks.customGuiReworked.api.GuiCategory;
 import dev.moonaticks.customGuiReworked.api.SlotType;
 import dev.moonaticks.customGuiReworked.api.StorageType;
 import dev.moonaticks.customGuiReworked.codec.Codecs;
@@ -36,7 +37,8 @@ import java.util.concurrent.ConcurrentHashMap;
  *       берут из своего инвентаря (клик, shift-клик, драг), right-click
  *       по пустому — очистить;</li>
  *   <li><b>STORAGE</b> — тип хранилища;</li>
- *   <li><b>BLOCKS</b> — привязка ID кастомных блоков.</li>
+ *   <li><b>BLOCKS</b> — привязка ID кастомных блоков;</li>
+ *   <li><b>CATEGORY</b> — выбор и создание категорий GUI.</li>
  * </ul>
  *
  * <p>Все действия сохраняются мгновенно; экраны обновляются
@@ -100,6 +102,7 @@ public class EditorManager {
             case DESIGN -> designScreen(session);
             case STORAGE -> storageScreen(session);
             case BLOCKS -> blocksScreen(session);
+            case CATEGORY -> categoryScreen(session);
         };
     }
 
@@ -131,6 +134,7 @@ public class EditorManager {
         inv.setItem(14, button(Material.ENDER_CHEST, "editor.btn.storage"));
         inv.setItem(15, button(Material.MAP, "editor.btn.preview"));
         inv.setItem(16, button(Material.COMPASS, "editor.btn.blocks"));
+        inv.setItem(21, button(Material.COMPASS, "editor.btn.category"));
         inv.setItem(22, button(Material.BARRIER, "editor.btn.back"));
         inv.setItem(25, button(Material.TNT, "editor.btn.delete"));
         return inv;
@@ -174,7 +178,7 @@ public class EditorManager {
         Gui gui = session.gui();
         Inventory inv = createScreen(session, EditorHolder.Screen.DESIGN, gui.slots(), "editor.designTitle");
         for (int i = 0; i < gui.slots(); i++) {
-            if (gui.slotType(i) == SlotType.DESIGN) {
+            if (isDesignSlot(gui, i)) {
                 ItemStack item = Codecs.decode(gui.designAt(i));
                 if (item != null && item.getType() != Material.AIR) {
                     inv.setItem(i, item);
@@ -238,6 +242,77 @@ public class EditorManager {
         return inv;
     }
 
+    /** Категории из API/редактора и ID, встречающиеся в файлах GUI. */
+    private List<String> categoryIds() {
+        java.util.Set<String> ids = new java.util.HashSet<>();
+        for (GuiCategory category : plugin.categories().all()) {
+            ids.add(category.id());
+        }
+        for (Gui gui : registry.all()) {
+            if (!GuiCategory.NONE.equals(gui.category())) {
+                ids.add(gui.category());
+            }
+        }
+        List<String> sorted = new ArrayList<>(ids);
+        sorted.sort(String.CASE_INSENSITIVE_ORDER);
+        return sorted;
+    }
+
+    public Inventory categoryScreen(EditorSession session) {
+        List<String> ids = categoryIds();
+        int pages = Math.max(1, (ids.size() + 26) / 27);
+        if (session.categoryPage() >= pages) {
+            session.categoryPage(pages - 1);
+        }
+        Inventory inv = createScreen(session, EditorHolder.Screen.CATEGORY, 45, "editor.categoryTitle");
+        EditorHolder holder = (EditorHolder) inv.getHolder();
+        ItemStack filler = item(Material.GRAY_STAINED_GLASS_PANE, lang.raw("editor.filler"));
+        for (int i = 0; i < 45; i++) {
+            inv.setItem(i, filler);
+        }
+        ItemStack none = item(Material.BARRIER, lang.raw("editor.category.none"));
+        if (GuiCategory.NONE.equals(session.gui().category())) {
+            highlight(none);
+        }
+        inv.setItem(0, none);
+        inv.setItem(7, button(Material.NAME_TAG, "editor.category.create"));
+        int start = session.categoryPage() * 27;
+        for (int i = 0; i < 27 && start + i < ids.size(); i++) {
+            String id = ids.get(start + i);
+            GuiCategory category = plugin.categories().get(id);
+            Material icon = category == null ? Material.BOOK : category.icon();
+            String name = category == null ? id : category.displayName();
+            String description = category == null ? "" : category.description();
+            List<Component> lore = new ArrayList<>();
+            lore.add(legacy(String.format(lang.raw("editor.category.id"), id)));
+            if (!description.isBlank()) {
+                lore.add(legacy(description));
+            }
+            ItemStack item = loreItem(icon, name, lore);
+            if (id.equals(session.gui().category())) {
+                highlight(item);
+            }
+            inv.setItem(9 + i, item);
+            holder.putCategory(9 + i, id);
+        }
+        inv.setItem(40, button(session.categoryPage() > 0 ? Material.ARROW : Material.GRAY_DYE,
+                "editor.category.prev"));
+        inv.setItem(41, item(Material.PAPER, String.format(lang.raw("editor.category.page"),
+                session.categoryPage() + 1, pages)));
+        inv.setItem(42, button(session.categoryPage() + 1 < pages ? Material.ARROW : Material.GRAY_DYE,
+                "editor.category.next"));
+        inv.setItem(44, button(Material.BARRIER, "editor.btn.back"));
+        return inv;
+    }
+
+    private void highlight(ItemStack item) {
+        ItemMeta meta = item.getItemMeta();
+        if (meta != null) {
+            meta.setEnchantmentGlintOverride(true);
+            item.setItemMeta(meta);
+        }
+    }
+
     // ================= действия =================
 
     public void setSlots(Player player, EditorSession session, int newSlots) {
@@ -292,7 +367,7 @@ public class EditorManager {
         boolean changed = false;
         for (int i = 0; i < gui.slots() && i < inv.getSize(); i++) {
             ItemStack current = inv.getItem(i);
-            if (gui.slotType(i) == SlotType.DESIGN) {
+            if (isDesignSlot(gui, i)) {
                 if (current != null && isPlaceholderItem(current)) {
                     continue; // служебная панель «пусто» — не сохраняем
                 }
@@ -347,7 +422,7 @@ public class EditorManager {
     private boolean hasDesignRoom(Gui gui, Inventory inv, ItemStack source) {
         int max = Math.max(1, source.getMaxStackSize());
         for (int i = 0; i < gui.slots() && i < inv.getSize(); i++) {
-            if (gui.slotType(i) != SlotType.DESIGN) {
+            if (!isDesignSlot(gui, i)) {
                 continue;
             }
             ItemStack current = inv.getItem(i);
@@ -374,7 +449,7 @@ public class EditorManager {
             return;
         }
         for (int i = 0; i < gui.slots() && i < inv.getSize(); i++) {
-            if (gui.slotType(i) != SlotType.DESIGN || (slots != null && !slots.contains(i))) {
+            if (!isDesignSlot(gui, i) || (slots != null && !slots.contains(i))) {
                 continue;
             }
             releasePane(inv, i);
@@ -451,7 +526,7 @@ public class EditorManager {
     /** Очищает один дизайн-слот (right-click по пустой руке). */
     public void clearDesignSlot(Player player, EditorSession session, int slot) {
         Gui gui = session.gui();
-        if (slot < 0 || slot >= gui.slots() || gui.slotType(slot) != SlotType.DESIGN) {
+        if (slot < 0 || slot >= gui.slots() || !isDesignSlot(gui, slot)) {
             return;
         }
         gui.setDesignAt(slot, "");
@@ -460,6 +535,49 @@ public class EditorManager {
             inv.setItem(slot, emptyPane());
         }
         registry.save(gui);
+    }
+
+    public void setCategory(Player player, EditorSession session, String id) {
+        Gui gui = session.gui();
+        gui.category(id);
+        registry.save(gui);
+        player.sendMessage(lang.msg("editor.category.changed", categoryName(gui.category())));
+        openMain(player, gui);
+    }
+
+    /** Создаёт категорию прямо в редакторе (ID и название из чата). */
+    public void createCategory(Player player, EditorSession session, String message) {
+        String[] parts = message.trim().split("\\s+", 2);
+        try {
+            String id = GuiCategory.normalizeId(parts[0]);
+            if (GuiCategory.NONE.equals(id)) {
+                throw new IllegalArgumentException("none is reserved");
+            }
+            if (plugin.categories().get(id) != null) {
+                player.sendMessage(lang.msg("editor.category.exists"));
+                openScreen(player, session, EditorHolder.Screen.CATEGORY);
+                return;
+            }
+            String displayName = parts.length > 1 ? parts[1] : id;
+            plugin.categories().register(new GuiCategory(id, displayName), true);
+            setCategory(player, session, id);
+        } catch (IllegalArgumentException e) {
+            player.sendMessage(lang.msg("editor.category.invalid"));
+            openScreen(player, session, EditorHolder.Screen.CATEGORY);
+        }
+    }
+
+    public void categoryPage(Player player, EditorSession session, boolean next) {
+        session.categoryPage(session.categoryPage() + (next ? 1 : -1));
+        openScreen(player, session, EditorHolder.Screen.CATEGORY);
+    }
+
+    private String categoryName(String id) {
+        if (GuiCategory.NONE.equals(id)) {
+            return lang.raw("editor.category.none");
+        }
+        GuiCategory category = plugin.categories().get(id);
+        return category == null ? id : category.displayName();
     }
 
     public void setStorage(Player player, EditorSession session, StorageType type) {
@@ -496,11 +614,18 @@ public class EditorManager {
         openScreen(player, session, EditorHolder.Screen.BLOCKS);
     }
 
+    /** Только зарегистрированные декоративные типы доступны редактору дизайна. */
+    public boolean isDesignSlot(Gui gui, int slot) {
+        SlotType type = gui.slotType(slot);
+        return type.isRegistered() && type.isDecorative();
+    }
+
     // ================= утилиты =================
 
     private static SlotType nextType(SlotType current) {
         SlotType[] all = SlotType.values();
-        return all[(current.ordinal() + 1) % all.length];
+        int index = java.util.Arrays.asList(all).indexOf(current);
+        return all[(index + 1) % all.length];
     }
 
     private String storageName(StorageType type) {
@@ -513,14 +638,14 @@ public class EditorManager {
         };
     }
 
-    private String slotKey(SlotType type) {
-        return switch (type) {
-            case DESIGN -> "slot.design";
-            case CONTAINER -> "slot.container";
-            case CRAFT -> "slot.craft";
-            case RESULT -> "slot.result";
-            case FUEL -> "slot.fuel";
-        };
+    private String slotName(SlotType type) {
+        if (!type.isRegistered()) {
+            return String.format(lang.raw("editor.skeleton.unknown"), type.id());
+        }
+        if (!type.isBuiltin()) {
+            return type.displayName();
+        }
+        return lang.raw("slot." + type.id());
     }
 
     private Inventory currentEditorInventory(Player player, EditorSession session, EditorHolder.Screen screen) {
@@ -543,20 +668,13 @@ public class EditorManager {
     }
 
     private ItemStack skeletonItem(SlotType type) {
-        List<Component> hint = List.of(
-                legacy(lang.raw("editor.skeleton.hint1")),
-                legacy(lang.raw("editor.skeleton.hint2")));
-        return loreItem(typeMaterial(type), lang.raw(slotKey(type)), hint);
-    }
-
-    private Material typeMaterial(SlotType type) {
-        return switch (type) {
-            case DESIGN -> Material.LIGHT_BLUE_STAINED_GLASS_PANE;
-            case CONTAINER -> Material.GREEN_STAINED_GLASS_PANE;
-            case CRAFT -> Material.ORANGE_STAINED_GLASS_PANE;
-            case RESULT -> Material.BLACK_STAINED_GLASS_PANE;
-            case FUEL -> Material.RED_STAINED_GLASS_PANE;
-        };
+        List<Component> hint = new ArrayList<>();
+        if (!type.description().isBlank()) {
+            hint.add(legacy(type.description()));
+        }
+        hint.add(legacy(lang.raw("editor.skeleton.hint1")));
+        hint.add(legacy(lang.raw("editor.skeleton.hint2")));
+        return loreItem(type.icon(), slotName(type), hint);
     }
 
     private Inventory createScreen(EditorSession session, EditorHolder.Screen screen, int size, String titleKey) {
@@ -572,11 +690,12 @@ public class EditorManager {
         List<Component> lore = new ArrayList<>();
         lore.add(legacy(lang.raw("editor.info.size").replace("%s", String.valueOf(gui.slots()))));
         lore.add(legacy(lang.raw("editor.info.storage").replace("%s", storageName(gui.storage()))));
-        for (SlotType type : SlotType.values()) {
-            long count = gui.skeleton().stream().filter(t -> t == type).count();
+        lore.add(legacy(lang.raw("editor.info.category").replace("%s", categoryName(gui.category()))));
+        for (SlotType type : gui.skeleton().stream().distinct().toList()) {
+            long count = gui.skeleton().stream().filter(t -> t.equals(type)).count();
             if (count > 0) {
                 lore.add(legacy(lang.raw("editor.info.type")
-                        .replace("%s", lang.raw(slotKey(type)))
+                        .replace("%s", slotName(type))
                         .replace("%d", String.valueOf(count))));
             }
         }

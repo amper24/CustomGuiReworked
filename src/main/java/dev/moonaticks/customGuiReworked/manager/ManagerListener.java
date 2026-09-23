@@ -1,6 +1,7 @@
 package dev.moonaticks.customGuiReworked.manager;
 
 import dev.moonaticks.customGuiReworked.CustomGuiReworked;
+import dev.moonaticks.customGuiReworked.api.GuiCategory;
 import io.papermc.paper.event.player.AsyncChatEvent;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.entity.Player;
@@ -9,7 +10,6 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
-import org.bukkit.inventory.Inventory;
 
 /**
  * События меню управления: клики по инвентарю и «живой» поиск в чате.
@@ -31,7 +31,6 @@ public class ManagerListener implements Listener {
         }
         event.setCancelled(true);
         Player player = (Player) event.getWhoClicked();
-        Inventory top = event.getInventory();
         int slot = event.getRawSlot();
 
         if (holder.screen() == ManagerHolder.Screen.LIST) {
@@ -41,6 +40,7 @@ public class ManagerListener implements Listener {
                 return;
             }
             switch (slot) {
+                case 4 -> manager.onCategoriesClick(player);
                 case 6 -> manager.onSearchClick(player);
                 case 7 -> manager.onCreateClick(player);
                 case 8 -> manager.onReloadClick(player);
@@ -50,6 +50,23 @@ public class ManagerListener implements Listener {
                 default -> {
                     // остальное — декор
                 }
+            }
+            return;
+        }
+
+        if (holder.screen() == ManagerHolder.Screen.CATEGORIES) {
+            String category = holder.categoryAt(slot);
+            if (category != null) {
+                manager.onCategorySelect(player, category);
+                return;
+            }
+            switch (slot) {
+                case 2 -> manager.onCategorySelect(player, null); // все
+                case 3 -> manager.onCategorySelect(player, GuiCategory.NONE);
+                case 40 -> manager.onCategoryPaging(player, false);
+                case 42 -> manager.onCategoryPaging(player, true);
+                case 44 -> manager.onCategoryBack(player);
+                default -> { }
             }
             return;
         }

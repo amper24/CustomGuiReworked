@@ -2,7 +2,7 @@
 # on startup the plugin refreshes the file on disk when its version is
 # older (the previous file is kept next to it as <name>.bak).
 # Can be disabled in config.yml: language-auto-update: false
-lang-version: 3
+lang-version: 4
 
 language:
   # ---------- Common ----------
@@ -21,6 +21,7 @@ language:
     skeletonTitle: "§6Skeleton: §f%s"
     designTitle: "§aDesign: §f%s"
     storageTitle: "§bStorage: §f%s"
+    categoryTitle: "§eCategory: §f%s"
     blocksTitle: "§dBlocks: §f%s"
     filler: " "
     btn:
@@ -31,12 +32,14 @@ language:
       storage: "§bData storage"
       preview: "§2Preview"
       blocks: "§dCustom blocks"
+      category: "§eCategory"
       back: "§cBack"
       delete: "§cDelete this GUI"
     info:
       name: "§fSummary"
       size: "§7Size: §f%s"
       storage: "§7Storage: §f%s"
+      category: "§7Category: §f%s"
       type: "§7%s: §f%d"
       commands: "§7Commands: §f%s"
       blocks: "§7Bound blocks: §f%s"
@@ -44,7 +47,19 @@ language:
       option: "§f%s slots"
     skeleton:
       hint1: "§7Click — switch type"
+      unknown: "§cUnknown type: §f%s"
       hint2: "§7Shift-Click — set Design"
+    category:
+      none: "§7No category"
+      create: "§aCreate category"
+      id: "§8ID: §f%s"
+      prev: "§ePrevious page"
+      next: "§eNext page"
+      page: "§fPage §6%s/%s"
+      prompt: "§eType the category ID and name in chat (e.g. machines Machines). §c/cancel §eto abort."
+      changed: "§aCategory set: §f%s"
+      exists: "§cA category with this ID already exists."
+      invalid: "§cInvalid ID: letters, digits, . _ - and an optional namespace separated by :."
     design:
       empty: "§7Empty"
       locked: "§cLocked (skeleton slot)"
@@ -99,9 +114,12 @@ language:
     title:
       list: "§6GUI list"
       options: "§6GUI: §f%s"
+      categories: "§6GUI categories"
     filler: " "
     btn:
       search: "§bSearch"
+      category: "§eCategory: §f%s"
+      categoryHint: "§7Choose a category to filter the list."
       searchHint: "§7Type in chat to search by name."
       create: "§eNew GUI"
       createHint: "§7Click and enter the name in chat."
@@ -114,11 +132,17 @@ language:
     status:
       count: "§7GUIs: §f%s"
       search: "§7Search: §f%s"
+      category: "§7Category: §f%s"
       noSearch: "§7No active search"
+    category:
+      all: "§fAll categories"
+      none: "§7No category"
+      count: "§7GUIs: §f%s"
     gui:
       title: "§8Title: §f%s"
       size: "§8Size: §f%s"
       storage: "§8Storage: §f%s"
+      category: "§8Category: §f%s"
       blocks: "§8Bound blocks: §f%s"
       commands: "§8Slot commands: §f%s"
       source:

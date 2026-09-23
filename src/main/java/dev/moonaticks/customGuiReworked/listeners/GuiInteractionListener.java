@@ -115,6 +115,16 @@ public class GuiInteractionListener implements Listener {
             // Для double-click ваниль может перераспределить предметы по
             // CONTAINER/CRAFT/FUEL слотам — реконсилируем всё.
             if (click == ClickType.DOUBLE_CLICK) {
+                try {
+                    if (!SlotInteractionPolicy.canCollect(player, gui, top, event.getCursor())) {
+                        event.setCancelled(true);
+                        return;
+                    }
+                } catch (RuntimeException e) {
+                    event.setCancelled(true); // ошибка фильтра не должна обходить запрет
+                    plugin.getLogger().warning("Slot type take filter failed: " + e.getMessage());
+                    return;
+                }
                 holder.addAllCandidates();
                 plugin.opener().scheduleReconcile(holder);
             }
@@ -124,13 +134,28 @@ public class GuiInteractionListener implements Listener {
         SlotType type = gui.slotType(slot);
 
         // Дизайн-слоты неизменяемы, но клик по кнопке работает.
-        if (type == SlotType.DESIGN) {
+        if (type.isDecorative()) {
             event.setCancelled(true);
-            boolean runCommands = fireClickEvent(player, gui, top, slot, type, click, event, true, holder);
+            boolean runCommands = fireClickEvent(player, gui, top, slot, type, click, event, type.isRegistered(), holder);
             if (runCommands) {
                 runCommands(player, gui, slot);
             }
             return;
+        }
+
+        // Double-click затрагивает и другие слоты, даже если клик был по
+        // обычному контейнеру: не даём украсть предметы из запертых типов.
+        if (click == ClickType.DOUBLE_CLICK) {
+            try {
+                if (!SlotInteractionPolicy.canCollect(player, gui, top, event.getCursor())) {
+                    event.setCancelled(true);
+                    return;
+                }
+            } catch (RuntimeException e) {
+                event.setCancelled(true);
+                plugin.getLogger().warning("Slot type take filter failed: " + e.getMessage());
+                return;
+            }
         }
 
         // Result: кладка предмета запрещена всеми способами.
@@ -144,6 +169,16 @@ public class GuiInteractionListener implements Listener {
             // а в CRAFT-слотах есть что «крафтить» — точка для валидации
             // рецепта и расхода CRAFT/FUEL.
             fireCraftEvent(player, gui, top, slot, click, event);
+        } else if (!type.isBuiltin()) {
+            try {
+                placementBlocked = !SlotInteractionPolicy.allowed(player, gui, top, slot, event);
+            } catch (RuntimeException e) {
+                placementBlocked = true;
+                plugin.getLogger().warning("Slot type interaction filter failed: " + e.getMessage());
+            }
+            if (placementBlocked) {
+                event.setCancelled(true);
+            }
         }
 
         boolean runCommands = fireClickEvent(player, gui, top, slot, type, click, event, !placementBlocked, holder);
@@ -182,15 +217,31 @@ public class GuiInteractionListener implements Listener {
         Inventory clicked = event.getClickedInventory();
         if (inTop) {
             SlotType type = gui.slotType(slot);
-            if (type == SlotType.DESIGN) {
+            if (type.isDecorative()) {
                 // Дизайн-слот: shift как обычный клик-кнопка, предмет не двигаем.
                 event.setCancelled(true);
                 boolean runCommands = fireClickEvent(player, gui, top, slot, type,
-                        event.getClick(), event, true, holder);
+                        event.getClick(), event, type.isRegistered(), holder);
                 if (runCommands) {
                     runCommands(player, gui, slot);
                 }
                 return;
+            }
+            // Для кастомного типа правила изъятия работают и при shift-выносе.
+            if (!type.isBuiltin()) {
+                try {
+                    ItemStack current = event.getCurrentItem();
+                    if (current != null && current.getType() != Material.AIR
+                            && !type.canTake(gui, top, slot, player, current)) {
+                        event.setCancelled(true);
+                        fireClickEvent(player, gui, top, slot, type, event.getClick(), event, false, holder);
+                        return;
+                    }
+                } catch (RuntimeException e) {
+                    event.setCancelled(true);
+                    plugin.getLogger().warning("Slot type take filter failed: " + e.getMessage());
+                    return;
+                }
             }
             // Из CONTAINER/CRAFT/FUEL/RESULT в свой инвентарь: отдаём ваниле
             // (предметы уходят в player-inventory, минуя DESIGN/RESULT).
@@ -217,7 +268,14 @@ public class GuiInteractionListener implements Listener {
         if (source == null || source.getType() == Material.AIR || source.getAmount() <= 0) {
             return;
         }
-        int moved = moveToTop(top, gui, source);
+        int moved;
+        try {
+            moved = moveToTop(player, top, gui, source);
+        } catch (RuntimeException e) {
+            event.setCancelled(true);
+            plugin.getLogger().warning("Slot type insert filter failed: " + e.getMessage());
+            return;
+        }
         if (moved <= 0) {
             // Некуда класть — полностью отменяем, ваниль ничего не делает.
             event.setCancelled(true);
@@ -248,17 +306,24 @@ public class GuiInteractionListener implements Listener {
      *
      * @return количество фактически перенесённых единиц
      */
-    private int moveToTop(Inventory top, Gui gui, ItemStack source) {
+    int moveToTop(Player player, Inventory top, Gui gui, ItemStack source) {
         int maxStack = Math.max(1, source.getMaxStackSize());
         int remaining = source.getAmount();
         if (remaining <= 0) {
             return 0;
         }
+        // Проверяем ВСЕ фильтры до первого изменения инвентаря: исключение
+        // чужого обработчика не должно оставить скопированный предмет сверху.
+        boolean[] accepting = new boolean[gui.slots()];
+        for (int i = 0; i < gui.slots(); i++) {
+            SlotType type = gui.slotType(i);
+            accepting[i] = type.isPersistable() && type.canInsert(gui, top, i, player, source);
+        }
 
         // 1-й проход: доливаем в похожие стаки.
         for (int i = 0; i < gui.slots() && remaining > 0; i++) {
-            if (!GuiHolder.isPersistable(gui.slotType(i))) {
-                continue; // пропускаем DESIGN и RESULT
+            if (!accepting[i]) {
+                continue;
             }
             ItemStack target = top.getItem(i);
             if (target == null || target.getType() == Material.AIR) {
@@ -279,7 +344,7 @@ public class GuiInteractionListener implements Listener {
 
         // 2-й проход: кладём в пустые слоты.
         for (int i = 0; i < gui.slots() && remaining > 0; i++) {
-            if (!GuiHolder.isPersistable(gui.slotType(i))) {
+            if (!accepting[i]) {
                 continue;
             }
             ItemStack target = top.getItem(i);
@@ -351,15 +416,25 @@ public class GuiInteractionListener implements Listener {
                 continue;
             }
             SlotType type = gui.slotType(rawSlot);
-            if (type == SlotType.DESIGN) {
+            if (type.isDecorative()) {
                 event.setCancelled(true);
                 return;
             }
-            if (type == SlotType.RESULT
-                    && event.getOldCursor() != null
-                    && event.getOldCursor().getType() != Material.AIR) {
-                event.setCancelled(true);
-                return;
+            ItemStack incoming = event.getNewItems() == null ? null : event.getNewItems().get(rawSlot);
+            if (incoming == null) {
+                incoming = event.getOldCursor();
+            }
+            if (incoming != null && incoming.getType() != Material.AIR) {
+                try {
+                    if (!type.canInsert(gui, top, rawSlot, player, incoming)) {
+                        event.setCancelled(true);
+                        return;
+                    }
+                } catch (RuntimeException e) {
+                    event.setCancelled(true);
+                    plugin.getLogger().warning("Slot type insert filter failed: " + e.getMessage());
+                    return;
+                }
             }
             affected.add(rawSlot);
         }
@@ -414,6 +489,12 @@ public class GuiInteractionListener implements Listener {
         GuiSlotClickEvent guiEvent = new GuiSlotClickEvent(player, gui, top, slot, type, true, click, handle);
         // Функциональный обработчик блока (внутренний) — до внешних слушателей.
         plugin.dispatcher().onGuiClick(player, holder, slot, type, guiEvent);
+        try {
+            type.handleClick(guiEvent);
+        } catch (RuntimeException e) {
+            guiEvent.setInteractionCancelled(true);
+            plugin.getLogger().warning("Slot type '" + type.id() + "' onClick failed: " + e.getMessage());
+        }
         Bukkit.getPluginManager().callEvent(guiEvent);
         if (guiEvent.isInteractionCancelled()) {
             handle.setCancelled(true);

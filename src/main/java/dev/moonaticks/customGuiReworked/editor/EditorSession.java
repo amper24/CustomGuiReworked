@@ -11,12 +11,13 @@ public class EditorSession {
 
     /** Активный чат-промпт (ввод заголовка / ID блока). */
     public enum Prompt {
-        NONE, TITLE, BLOCK_ID
+        NONE, TITLE, BLOCK_ID, CATEGORY
     }
 
     private final UUID uuid;
     private Gui gui;
     private Prompt prompt = Prompt.NONE;
+    private int categoryPage;
 
     public EditorSession(UUID uuid, Gui gui) {
         this.uuid = uuid;
@@ -41,5 +42,13 @@ public class EditorSession {
 
     public void prompt(Prompt prompt) {
         this.prompt = prompt == null ? Prompt.NONE : prompt;
+    }
+
+    public int categoryPage() {
+        return categoryPage;
+    }
+
+    public void categoryPage(int page) {
+        categoryPage = Math.max(0, page);
     }
 }

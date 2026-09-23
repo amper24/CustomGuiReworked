@@ -290,10 +290,11 @@ public class GuiRegistry {
         config.set("title", gui.title());
         config.set("slots", gui.slots());
         config.set("storage", gui.storage().id());
+        config.set("category", gui.category());
         config.set("source", gui.source().name().toLowerCase(Locale.ROOT));
         List<String> skeleton = new ArrayList<>(gui.slots());
         for (SlotType type : gui.skeleton()) {
-            skeleton.add(type.name().toLowerCase(Locale.ROOT));
+            skeleton.add(type.id());
         }
         config.set("skeleton", skeleton);
         config.set("design", new ArrayList<>(gui.design()));
@@ -418,6 +419,11 @@ public class GuiRegistry {
         Gui gui = new Gui(name);
         gui.title(config.getString("title", name));
         gui.slots(config.getInt("slots", 27));
+        try {
+            gui.category(config.getString("category"));
+        } catch (IllegalArgumentException e) {
+            plugin.getLogger().warning("Invalid category in " + file.getName() + ": " + e.getMessage());
+        }
         gui.source(sourceOf(file, config));
 
         if (config.isString("storage")) {

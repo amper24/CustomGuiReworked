@@ -2,6 +2,7 @@ package dev.moonaticks.customGuiReworked.editor;
 
 import dev.moonaticks.customGuiReworked.CustomGuiReworked;
 import dev.moonaticks.customGuiReworked.api.Gui;
+import dev.moonaticks.customGuiReworked.api.GuiCategory;
 import dev.moonaticks.customGuiReworked.api.SlotType;
 import dev.moonaticks.customGuiReworked.api.StorageType;
 import io.papermc.paper.event.player.AsyncChatEvent;
@@ -71,6 +72,7 @@ public class EditorListener implements Listener {
             case DESIGN -> onDesign(player, session, slot, event);
             case STORAGE -> onStorage(player, session, slot);
             case BLOCKS -> onBlocks(player, session, slot, event);
+            case CATEGORY -> onCategory(player, session, holder, slot);
         }
     }
 
@@ -102,7 +104,7 @@ public class EditorListener implements Listener {
                 if (slot < 0 || slot >= top.getSize()) {
                     continue; // инвентарь игрока — обычный драг
                 }
-                if (taking || gui.slotType(slot) == SlotType.DESIGN) {
+                if (taking || editor.isDesignSlot(gui, slot)) {
                     editor.releasePane(top, slot);
                 }
             }
@@ -204,6 +206,7 @@ public class EditorListener implements Listener {
             switch (prompt) {
                 case TITLE -> editor.setTitle(player, current, message);
                 case BLOCK_ID -> editor.addBlockId(player, current, message);
+                case CATEGORY -> editor.createCategory(player, current, message);
                 case NONE -> {
                 }
             }
@@ -228,6 +231,7 @@ public class EditorListener implements Listener {
             case 14 -> editor.openScreen(player, session, EditorHolder.Screen.STORAGE);
             case 15 -> plugin.opener().openForPlayer(player, session.gui());
             case 16 -> editor.openScreen(player, session, EditorHolder.Screen.BLOCKS);
+            case 21 -> editor.openScreen(player, session, EditorHolder.Screen.CATEGORY);
             case 22 -> player.closeInventory();
             case 25 -> {
                 if (player.hasPermission("cgui.delete")) {
@@ -257,7 +261,7 @@ public class EditorListener implements Listener {
 
     private void onDesign(Player player, EditorSession session, int slot, InventoryClickEvent event) {
         Gui gui = session.gui();
-        if (gui.slotType(slot) != SlotType.DESIGN) {
+        if (!editor.isDesignSlot(gui, slot)) {
             player.sendMessage(editor.lang().msg("editor.design.lockedClick"));
             return;
         }
@@ -320,6 +324,28 @@ public class EditorListener implements Listener {
             editor.setStorage(player, session, types[slot - 11]);
         } else if (slot == 22) {
             editor.openMain(player, session.gui());
+        }
+    }
+
+    private void onCategory(Player player, EditorSession session, EditorHolder holder, int slot) {
+        String id = holder.categoryAt(slot);
+        if (id != null) {
+            editor.setCategory(player, session, id);
+            return;
+        }
+        switch (slot) {
+            case 0 -> editor.setCategory(player, session,
+                    GuiCategory.NONE);
+            case 7 -> {
+                player.closeInventory();
+                session.prompt(EditorSession.Prompt.CATEGORY);
+                editor.schedulePromptTimeout(player, session);
+                player.sendMessage(editor.lang().msg("editor.category.prompt"));
+            }
+            case 40 -> editor.categoryPage(player, session, false);
+            case 42 -> editor.categoryPage(player, session, true);
+            case 44 -> editor.openMain(player, session.gui());
+            default -> { }
         }
     }
 

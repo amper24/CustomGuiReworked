@@ -54,6 +54,17 @@ public class GuiBuilder {
         return this;
     }
 
+    /** Категория для меню /gui (по умолчанию none). */
+    public GuiBuilder category(String id) {
+        gui.category(id);
+        return this;
+    }
+
+    public GuiBuilder category(GuiCategory category) {
+        gui.category(category);
+        return this;
+    }
+
     /** Задаёт тип одного слота. */
     public GuiBuilder slot(int slot, SlotType type) {
         gui.setSlotType(slot, type);

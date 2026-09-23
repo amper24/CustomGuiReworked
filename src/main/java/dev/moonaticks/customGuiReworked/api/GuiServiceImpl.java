@@ -5,6 +5,7 @@ import dev.moonaticks.customGuiReworked.codec.Codecs;
 import dev.moonaticks.customGuiReworked.api.functional.CraftingRecipe;
 import dev.moonaticks.customGuiReworked.api.functional.FunctionalBlockData;
 import dev.moonaticks.customGuiReworked.api.functional.FunctionalBlockRegistry;
+import dev.moonaticks.customGuiReworked.editor.EditorHolder;
 import dev.moonaticks.customGuiReworked.gui.GuiHolder;
 import dev.moonaticks.customGuiReworked.gui.GuiOpener;
 import dev.moonaticks.customGuiReworked.storage.BlockStorageBackend;
@@ -105,6 +106,83 @@ public class GuiServiceImpl implements GuiService {
         plugin.registry().save(gui);
     }
 
+    // ================= категории и типы слотов =================
+
+    @Override
+    public GuiCategory registerCategory(GuiCategory category) {
+        return registerCategory(category, true);
+    }
+
+    @Override
+    public GuiCategory registerCategory(GuiCategory category, boolean persist) {
+        return plugin.categories().register(category, persist);
+    }
+
+    @Override
+    public boolean unregisterCategory(String id) {
+        return plugin.categories().unregister(id);
+    }
+
+    @Override
+    public GuiCategory getCategory(String id) {
+        return plugin.categories().get(id);
+    }
+
+    @Override
+    public List<GuiCategory> getCategories() {
+        return plugin.categories().all();
+    }
+
+    @Override
+    public SlotType registerSlotType(SlotType type) {
+        if (type == null || type.isBuiltin() || !type.isRegistered()) {
+            throw new IllegalArgumentException("A custom slot type definition is required");
+        }
+        // Placeholder мог быть загружен из файла раньше регистрации addon'а.
+        // Закрываем такие окна ДО активации типа: baseline и содержимое нужно
+        // заново собрать из хранилища, иначе первая запись могла бы его стереть.
+        SlotType placeholder = SlotType.fromLegacy(type.id());
+        for (Player viewer : plugin.getServer().getOnlinePlayers()) {
+            Inventory top = viewer.getOpenInventory().getTopInventory();
+            if ((top.getHolder() instanceof GuiHolder holder
+                    && !holder.gui().slotsOf(placeholder).isEmpty())
+                    || (top.getHolder() instanceof EditorHolder editor
+                    && !editor.gui().slotsOf(placeholder).isEmpty())) {
+                viewer.closeInventory();
+            }
+        }
+        return SlotType.register(type);
+    }
+
+    @Override
+    public boolean unregisterSlotType(String id) {
+        SlotType type = SlotType.get(id);
+        if (type == null || type.isBuiltin()) {
+            return false;
+        }
+        // Закрытие пока правила активны сохраняет персистентные слоты и
+        // возвращает временные предметы. Затем ссылки переходят в safe-mode.
+        for (Player viewer : plugin.getServer().getOnlinePlayers()) {
+            Inventory top = viewer.getOpenInventory().getTopInventory();
+            if ((top.getHolder() instanceof GuiHolder holder && !holder.gui().slotsOf(type).isEmpty())
+                    || (top.getHolder() instanceof EditorHolder editor
+                    && !editor.gui().slotsOf(type).isEmpty())) {
+                viewer.closeInventory();
+            }
+        }
+        return SlotType.unregister(id);
+    }
+
+    @Override
+    public SlotType getSlotType(String id) {
+        return SlotType.get(id);
+    }
+
+    @Override
+    public List<SlotType> getSlotTypes() {
+        return List.of(SlotType.values());
+    }
+
     // ================= открытие =================
 
     @Override
@@ -140,6 +218,24 @@ public class GuiServiceImpl implements GuiService {
     @Override
     public Gui getOpenGui(Player player) {
         return plugin.opener().guiOf(player == null ? null : player.getUniqueId());
+    }
+
+    @Override
+    public boolean setSlotItem(Inventory inventory, int slot, ItemStack item) {
+        if (inventory == null || !(inventory.getHolder() instanceof GuiHolder holder)
+                || holder.getInventory() != inventory) {
+            return false;
+        }
+        Gui gui = holder.gui();
+        if (slot < 0 || slot >= gui.slots() || slot >= inventory.getSize()
+                || !GuiHolder.isTracked(gui.slotType(slot))
+                || gui.slotType(slot).isDecorative()) {
+            return false;
+        }
+        inventory.setItem(slot, item == null || item.getType() == Material.AIR ? null : item.clone());
+        holder.addCandidate(slot);
+        plugin.opener().scheduleReconcile(holder);
+        return true;
     }
 
     // ================= блоки =================
